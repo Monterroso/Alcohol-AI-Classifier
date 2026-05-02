@@ -1,0 +1,254 @@
+"use client";
+
+import Link from "next/link";
+import { FileArchive, FileSpreadsheet, FileUp, Images, Plus, Send, Trash2 } from "lucide-react";
+
+import { useApplicationStore } from "@/features/applications/store";
+import {
+  emptySubmittedData,
+  labelTypeOptions,
+  type LabelType,
+  type SubmittedApplicationData
+} from "@/features/applications/types";
+
+const uploadFields: Array<{
+  key: keyof SubmittedApplicationData;
+  label: string;
+  placeholder: string;
+}> = [
+  { key: "applicant_name", label: "Applicant", placeholder: "Northline Spirits LLC" },
+  { key: "application_type", label: "Application type", placeholder: "Distilled spirits label" },
+  { key: "brand_name", label: "Brand name", placeholder: "Northline" },
+  { key: "product_name", label: "Product name", placeholder: "Northline Reserve Bourbon" },
+  { key: "alcohol_content", label: "Alcohol content", placeholder: "40% ALC/VOL" },
+  { key: "net_contents", label: "Net contents", placeholder: "750 ML" },
+  { key: "origin", label: "Origin", placeholder: "Louisville, Kentucky" },
+  { key: "government_warning", label: "Government warning", placeholder: "Government warning present" }
+];
+
+export function ApplicationUpload() {
+  const uploadMode = useApplicationStore((state) => state.uploadMode);
+  const singleForm = useApplicationStore((state) => state.singleForm);
+  const singleImages = useApplicationStore((state) => state.singleImages);
+  const batchZipName = useApplicationStore((state) => state.batchZipName);
+  const batchCsvName = useApplicationStore((state) => state.batchCsvName);
+  const batchRows = useApplicationStore((state) => state.batchRows);
+  const setUploadMode = useApplicationStore((state) => state.setUploadMode);
+  const updateSingleField = useApplicationStore((state) => state.updateSingleField);
+  const addSingleFiles = useApplicationStore((state) => state.addSingleFiles);
+  const addPlaceholderImage = useApplicationStore((state) => state.addPlaceholderImage);
+  const updateSingleImageLabel = useApplicationStore((state) => state.updateSingleImageLabel);
+  const removeSingleImage = useApplicationStore((state) => state.removeSingleImage);
+  const submitSingleUpload = useApplicationStore((state) => state.submitSingleUpload);
+  const setBatchZipName = useApplicationStore((state) => state.setBatchZipName);
+  const setBatchCsvName = useApplicationStore((state) => state.setBatchCsvName);
+  const stageBatchPreview = useApplicationStore((state) => state.stageBatchPreview);
+  const submitBatchUpload = useApplicationStore((state) => state.submitBatchUpload);
+
+  const hasSingleData = Object.keys(emptySubmittedData).some(
+    (key) => singleForm[key as keyof SubmittedApplicationData].trim().length > 0
+  );
+  const canSubmitSingle =
+    singleForm.applicant_name.trim().length > 0 &&
+    singleForm.product_name.trim().length > 0 &&
+    singleForm.brand_name.trim().length > 0;
+  const canSubmitBatch = batchRows.length > 0 || (batchZipName.length > 0 && batchCsvName.length > 0);
+
+  return (
+    <main className="page-shell">
+      <header className="page-header">
+        <div>
+          <p className="eyebrow">Application Intake</p>
+          <h1>Upload Applications</h1>
+          <p>Submit a single application with labeled images, or stage a batch from a ZIP and CSV.</p>
+        </div>
+        <Link className="secondary-link" href="/applications">
+          View queue
+        </Link>
+      </header>
+
+      <section className="upload-tabs" aria-label="Upload mode">
+        <button
+          className={uploadMode === "single" ? "tab-button active" : "tab-button"}
+          onClick={() => setUploadMode("single")}
+        >
+          <Images aria-hidden="true" size={18} />
+          Single upload
+        </button>
+        <button
+          className={uploadMode === "batch" ? "tab-button active" : "tab-button"}
+          onClick={() => setUploadMode("batch")}
+        >
+          <FileArchive aria-hidden="true" size={18} />
+          Batch upload
+        </button>
+      </section>
+
+      {uploadMode === "single" ? (
+        <section className="upload-grid">
+          <section className="upload-panel">
+            <div className="section-heading">
+              <h2>Application Information</h2>
+              <span>{hasSingleData ? "Draft" : "Empty"}</span>
+            </div>
+            <div className="form-grid">
+              {uploadFields.map((field) => (
+                <label className="field-label" key={field.key}>
+                  {field.label}
+                  <input
+                    value={singleForm[field.key]}
+                    onChange={(event) => updateSingleField(field.key, event.target.value)}
+                    placeholder={field.placeholder}
+                  />
+                </label>
+              ))}
+            </div>
+          </section>
+
+          <section className="upload-panel">
+            <div className="section-heading">
+              <h2>Label Images</h2>
+              <span>{singleImages.length || "No"} images</span>
+            </div>
+            <div className="drop-panel">
+              <FileUp aria-hidden="true" size={26} />
+              <label>
+                Upload label images
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={(event) => {
+                    if (event.currentTarget.files) {
+                      addSingleFiles(event.currentTarget.files);
+                    }
+                  }}
+                />
+              </label>
+              <button className="secondary-button compact" onClick={addPlaceholderImage}>
+                <Plus aria-hidden="true" size={17} />
+                Add mock image
+              </button>
+            </div>
+
+            <div className="image-draft-list">
+              {singleImages.map((image) => (
+                <article className="image-draft-row" key={image.id}>
+                  <img src={image.preview_url} alt={image.original_filename} />
+                  <div>
+                    <strong>{image.original_filename}</strong>
+                    <label className="select-label">
+                      Label
+                      <select
+                        value={image.label_type}
+                        onChange={(event) =>
+                          updateSingleImageLabel(image.id, event.target.value as LabelType)
+                        }
+                      >
+                        {labelTypeOptions.map((option) => (
+                          <option value={option.value} key={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  <button
+                    className="icon-button"
+                    onClick={() => removeSingleImage(image.id)}
+                    aria-label={`Remove ${image.original_filename}`}
+                    title="Remove image"
+                  >
+                    <Trash2 aria-hidden="true" size={18} />
+                  </button>
+                </article>
+              ))}
+            </div>
+
+            <div className="upload-actions">
+              <button className="primary-button" disabled={!canSubmitSingle} onClick={submitSingleUpload}>
+                <Send aria-hidden="true" size={18} />
+                Submit Application
+              </button>
+            </div>
+          </section>
+        </section>
+      ) : (
+        <section className="upload-grid batch-grid">
+          <section className="upload-panel">
+            <div className="section-heading">
+              <h2>Batch Files</h2>
+              <span>{batchRows.length ? `${batchRows.length} staged` : "Not staged"}</span>
+            </div>
+            <div className="batch-file-grid">
+              <label className="file-picker">
+                <FileArchive aria-hidden="true" size={24} />
+                <span>Images ZIP</span>
+                <strong>{batchZipName || "Choose ZIP file"}</strong>
+                <input
+                  type="file"
+                  accept=".zip"
+                  onChange={(event) => setBatchZipName(event.currentTarget.files?.[0]?.name ?? "")}
+                />
+              </label>
+              <label className="file-picker">
+                <FileSpreadsheet aria-hidden="true" size={24} />
+                <span>Application CSV</span>
+                <strong>{batchCsvName || "Choose CSV file"}</strong>
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  onChange={(event) => setBatchCsvName(event.currentTarget.files?.[0]?.name ?? "")}
+                />
+              </label>
+            </div>
+            <div className="csv-format">
+              <strong>CSV columns</strong>
+              <p>
+                One row per application. Image columns can repeat by label, such as front_image_1,
+                front_image_2, back_image_1, neck_image_1, and government_warning_image_1.
+              </p>
+            </div>
+            <div className="upload-actions">
+              <button className="secondary-button" onClick={stageBatchPreview}>
+                Stage Preview
+              </button>
+              <button className="primary-button" disabled={!canSubmitBatch} onClick={submitBatchUpload}>
+                <Send aria-hidden="true" size={18} />
+                Submit Batch
+              </button>
+            </div>
+          </section>
+
+          <section className="upload-panel">
+            <div className="section-heading">
+              <h2>Staged Applications</h2>
+              <span>{batchRows.length || "No"} rows</span>
+            </div>
+            <div className="batch-preview-list">
+              {batchRows.length === 0 ? (
+                <div className="empty-panel">Stage the CSV to preview how applications and labels will map.</div>
+              ) : null}
+              {batchRows.map((row) => (
+                <article className="batch-preview-row" key={row.id}>
+                  <div>
+                    <strong>{row.submitted_data.product_name}</strong>
+                    <span>{row.submitted_data.applicant_name}</span>
+                    <span>{row.submitted_data.application_type}</span>
+                  </div>
+                  <div className="label-chip-list">
+                    {row.images.map((image) => (
+                      <span className="label-chip" key={`${row.id}-${image.original_filename}`}>
+                        {image.label_type}: {image.original_filename?.split("/").pop()}
+                      </span>
+                    ))}
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        </section>
+      )}
+    </main>
+  );
+}
