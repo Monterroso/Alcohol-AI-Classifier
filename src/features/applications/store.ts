@@ -72,7 +72,6 @@ type ApplicationStore = {
   helpFieldKey: keyof SubmittedApplicationData | null;
   zoomed: boolean;
   rotation: number;
-  submittedDecisionByApplicationId: Record<string, Decision | undefined>;
   initializeDatabase: () => Promise<void>;
   subscribeToDatabase: () => () => void;
   setUploadMode: (mode: UploadMode) => void;
@@ -151,7 +150,6 @@ export const useApplicationStore = create<ApplicationStore>((set, get) => ({
   helpFieldKey: null,
   zoomed: false,
   rotation: 0,
-  submittedDecisionByApplicationId: {},
   initializeDatabase: async () => {
     set({ isDatabaseLoading: true, databaseError: null });
     try {
@@ -292,10 +290,6 @@ export const useApplicationStore = create<ApplicationStore>((set, get) => ({
         decisionModal: null,
         decisionNotes: "",
         selectedApplicationIds: state.selectedApplicationIds.filter((id) => !applicationIds.includes(id)),
-        submittedDecisionByApplicationId: applicationIds.reduce(
-          (decisions, applicationId) => ({ ...decisions, [applicationId]: decision }),
-          state.submittedDecisionByApplicationId
-        ),
         databaseError: null
       });
       await get().initializeDatabase();
@@ -336,7 +330,18 @@ export const useApplicationStore = create<ApplicationStore>((set, get) => ({
   resetSeedData: async () => {
     try {
       await resetApplicationSeedData();
-      set({ databaseError: null });
+      set({
+        databaseError: null,
+        decisionModal: null,
+        decisionNotes: "",
+        selectedApplicationIds: [],
+        reviewNotesByApplicationId: {},
+        activeFieldByApplicationId: {},
+        evidenceIndexByApplicationId: {},
+        helpFieldKey: null,
+        zoomed: false,
+        rotation: 0
+      });
       await get().initializeDatabase();
     } catch (error) {
       set({ databaseError: errorMessage(error) });

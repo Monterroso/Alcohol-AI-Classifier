@@ -78,9 +78,6 @@ export function ReviewWorkspace({ applicationId }: { applicationId: string }) {
   const zoomed = useApplicationStore((state) => state.zoomed);
   const rotation = useApplicationStore((state) => state.rotation);
   const reviewNotes = useApplicationStore((state) => state.reviewNotesByApplicationId[applicationId] ?? "");
-  const submittedDecision = useApplicationStore(
-    (state) => state.submittedDecisionByApplicationId[applicationId]
-  );
   const setReviewNotes = useApplicationStore((state) => state.setReviewNotes);
   const setActiveField = useApplicationStore((state) => state.setActiveField);
   const setEvidenceIndex = useApplicationStore((state) => state.setEvidenceIndex);
@@ -126,11 +123,9 @@ export function ReviewWorkspace({ applicationId }: { applicationId: string }) {
     ? fieldDefinitions.find((definition) => definition.key === helpFieldKey)
     : null;
   const hasDocumentIntelligence = analysis.application.processing_status === "processed";
-  const persistedFinalDecision = isFinalReviewStatus(analysis.application.review_status)
+  const finalDecision = isFinalReviewStatus(analysis.application.review_status)
     ? analysis.application.review_status
     : null;
-  const localFinalDecision = isFinalReviewStatus(submittedDecision) ? submittedDecision : null;
-  const finalDecision = persistedFinalDecision ?? localFinalDecision;
   const isFinalized = Boolean(finalDecision);
 
   return (
