@@ -617,6 +617,61 @@ input[type="checkbox"] {
   margin-top: 14px;
 }
 
+.demo-float {
+  position: fixed;
+  top: 76px;
+  right: max(16px, calc((100vw - 1480px) / 2 + 16px));
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 2px solid #f59e0b;
+  border-radius: 8px;
+  background: #fff7ed;
+  padding: 10px;
+  box-shadow: 0 18px 45px rgba(180, 83, 9, 0.28);
+  backdrop-filter: blur(12px);
+}
+
+.demo-float strong {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 6px;
+  background: #dc2626;
+  color: #fff;
+  padding: 0 12px;
+  font-size: 0.9rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.demo-float select {
+  width: min(250px, 42vw);
+  min-height: 40px;
+}
+
+.demo-float-button {
+  flex: 0 0 auto;
+  width: 52px;
+  height: 52px;
+  border-color: #b42318;
+  background: #dc2626;
+  color: #fff;
+  box-shadow: 0 10px 24px rgba(180, 35, 24, 0.34);
+}
+
+.demo-float-button:hover:not(:disabled) {
+  background: #991b1b;
+  border-color: #991b1b;
+}
+
+.demo-float-button svg {
+  width: 24px;
+  height: 24px;
+}
+
 .image-draft-row,
 .batch-preview-row {
   display: grid;
@@ -1151,5 +1206,24 @@ input[type="checkbox"] {
 
   .image-stage {
     min-height: 300px;
+  }
+
+  .demo-float {
+    top: auto;
+    right: 9px;
+    bottom: 12px;
+    left: 9px;
+    justify-content: flex-end;
+  }
+
+  .demo-float strong {
+    font-size: 0.78rem;
+    padding: 0 8px;
+  }
+
+  .demo-float select {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
   }
 }

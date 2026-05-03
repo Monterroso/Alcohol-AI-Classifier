@@ -1,9 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useRef } from "react";
-import { FileArchive, FileSpreadsheet, FileUp, Images, Send, Trash2 } from "lucide-react";
+import { useRef, useState } from "react";
+import { FileArchive, FileSpreadsheet, FileUp, Images, Send, Sparkles, Trash2 } from "lucide-react";
 
+import {
+  createBatchDemoFiles,
+  createSingleDemoDraft,
+  singleDemoPresets
+} from "@/features/applications/demo-data";
 import { useApplicationStore } from "@/features/applications/store";
 import {
   emptySubmittedData,
@@ -29,6 +34,9 @@ const uploadFields: Array<{
 
 export function ApplicationUpload() {
   const singleImageInputRef = useRef<HTMLInputElement>(null);
+  const [singleDemoPresetId, setSingleDemoPresetId] = useState(singleDemoPresets[0].id);
+  const [isDemoLoading, setIsDemoLoading] = useState(false);
+  const [demoSummary, setDemoSummary] = useState<string | null>(null);
   const uploadMode = useApplicationStore((state) => state.uploadMode);
   const singleForm = useApplicationStore((state) => state.singleForm);
   const singleImages = useApplicationStore((state) => state.singleImages);
@@ -37,6 +45,7 @@ export function ApplicationUpload() {
   const setUploadMode = useApplicationStore((state) => state.setUploadMode);
   const updateSingleField = useApplicationStore((state) => state.updateSingleField);
   const addSingleFiles = useApplicationStore((state) => state.addSingleFiles);
+  const loadSingleDemoDraft = useApplicationStore((state) => state.loadSingleDemoDraft);
   const updateSingleImageLabel = useApplicationStore((state) => state.updateSingleImageLabel);
   const removeSingleImage = useApplicationStore((state) => state.removeSingleImage);
   const submitSingleUpload = useApplicationStore((state) => state.submitSingleUpload);
@@ -53,6 +62,41 @@ export function ApplicationUpload() {
     singleForm.brand_name.trim().length > 0 &&
     singleImages.length > 0;
   const canSubmitBatch = Boolean(batchZipFile && batchCsvFile);
+  const selectedSingleDemo =
+    singleDemoPresets.find((preset) => preset.id === singleDemoPresetId) ?? singleDemoPresets[0];
+
+  async function handleLoadSingleDemo() {
+    setIsDemoLoading(true);
+    setDemoSummary(null);
+    try {
+      const demo = await createSingleDemoDraft(selectedSingleDemo);
+      loadSingleDemoDraft(demo.submittedData, demo.images);
+      setDemoSummary(
+        `Loaded ${selectedSingleDemo.name} with ${demo.images.length} generated image${
+          demo.images.length === 1 ? "" : "s"
+        }.`
+      );
+    } catch (error) {
+      setDemoSummary(error instanceof Error ? error.message : "Could not load the single demo preset.");
+    } finally {
+      setIsDemoLoading(false);
+    }
+  }
+
+  async function handleLoadBatchDemo() {
+    setIsDemoLoading(true);
+    setDemoSummary(null);
+    try {
+      const demo = await createBatchDemoFiles();
+      setBatchZipFile(demo.zipFile);
+      setBatchCsvFile(demo.csvFile);
+      setDemoSummary(`Loaded a ${demo.applicationCount}-application batch with ${demo.imageCount} generated images.`);
+    } catch (error) {
+      setDemoSummary(error instanceof Error ? error.message : "Could not load the batch demo files.");
+    } finally {
+      setIsDemoLoading(false);
+    }
+  }
 
   return (
     <main className="page-shell">
@@ -83,6 +127,44 @@ export function ApplicationUpload() {
           Batch upload
         </button>
       </section>
+
+      <aside className="demo-float" aria-label="Demo presets">
+        <strong>Add Data for Demo</strong>
+        <select
+          value={singleDemoPresetId}
+          onChange={(event) => setSingleDemoPresetId(event.target.value)}
+          title="Single upload demo preset"
+          aria-label="Single upload demo preset"
+        >
+          {singleDemoPresets.map((preset) => (
+            <option value={preset.id} key={preset.id}>
+              {preset.name}
+            </option>
+          ))}
+        </select>
+        <button
+          className="icon-button demo-float-button"
+          type="button"
+          onClick={handleLoadSingleDemo}
+          disabled={isDemoLoading}
+          title={`Load single demo: ${selectedSingleDemo.name}`}
+          aria-label={`Load single demo: ${selectedSingleDemo.name}`}
+        >
+          <Sparkles aria-hidden="true" size={18} />
+        </button>
+        <button
+          className="icon-button demo-float-button"
+          type="button"
+          onClick={handleLoadBatchDemo}
+          disabled={isDemoLoading}
+          title="Load batch demo"
+          aria-label="Load batch demo"
+        >
+          <FileArchive aria-hidden="true" size={18} />
+        </button>
+      </aside>
+
+      {demoSummary ? <div className="success-strip">{demoSummary}</div> : null}
 
       {uploadMode === "single" ? (
         <section className="upload-grid">

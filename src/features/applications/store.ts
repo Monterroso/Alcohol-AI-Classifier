@@ -76,6 +76,7 @@ type ApplicationStore = {
   setUploadMode: (mode: UploadMode) => void;
   updateSingleField: (field: keyof SubmittedApplicationData, value: string) => void;
   addSingleFiles: (files: FileList | File[]) => void;
+  loadSingleDemoDraft: (submittedData: SubmittedApplicationData, images: UploadImageDraft[]) => void;
   updateSingleImageLabel: (imageId: string, labelType: LabelType) => void;
   removeSingleImage: (imageId: string) => void;
   submitSingleUpload: () => Promise<void>;
@@ -188,6 +189,12 @@ export const useApplicationStore = create<ApplicationStore>((set, get) => ({
         }))
       ]
     })),
+  loadSingleDemoDraft: (submittedData, images) =>
+    set({
+      singleForm: submittedData,
+      singleImages: images,
+      databaseError: null
+    }),
   updateSingleImageLabel: (imageId, labelType) =>
     set((state) => ({
       singleImages: state.singleImages.map((image) =>
