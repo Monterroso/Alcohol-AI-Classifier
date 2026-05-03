@@ -8,7 +8,6 @@ import {
   ChevronRight,
   CircleHelp,
   Eye,
-  Loader2,
   Minimize2,
   RotateCw,
   XCircle,
@@ -126,7 +125,7 @@ export function ReviewWorkspace({ applicationId }: { applicationId: string }) {
   const helpDefinition = helpFieldKey
     ? fieldDefinitions.find((definition) => definition.key === helpFieldKey)
     : null;
-  const isAwaitingProcessing = analysis.application.processing_status !== "processed";
+  const hasDocumentIntelligence = analysis.application.processing_status === "processed";
   const persistedFinalDecision = isFinalReviewStatus(analysis.application.review_status)
     ? analysis.application.review_status
     : null;
@@ -144,10 +143,13 @@ export function ReviewWorkspace({ applicationId }: { applicationId: string }) {
           <p className="eyebrow">Application Review</p>
           <h1>{analysis.application.submitted_data.product_name || "Untitled application"}</h1>
           <p>
-            {analysis.status_message}{" "}
-            {typeof analysis.average_confidence === "number"
-              ? `${analysis.average_confidence}% average confidence.`
-              : "Confidence will be available after processing."}
+            {hasDocumentIntelligence
+              ? `${analysis.status_message} ${
+                  typeof analysis.average_confidence === "number"
+                    ? `${analysis.average_confidence}% average confidence.`
+                    : ""
+                }`
+              : "Review the submitted application data and uploaded label images."}
           </p>
         </div>
         <div className="header-meta">
@@ -161,7 +163,7 @@ export function ReviewWorkspace({ applicationId }: { applicationId: string }) {
         <FinalDecisionBanner decision={finalDecision} />
       ) : null}
 
-      {analysis.issues.length > 0 ? (
+      {hasDocumentIntelligence && analysis.issues.length > 0 ? (
         <section className="issue-strip" aria-label="Review issues">
           {analysis.issues.slice(0, 3).map((issue) => (
             <div key={issue}>
@@ -172,74 +174,73 @@ export function ReviewWorkspace({ applicationId }: { applicationId: string }) {
         </section>
       ) : null}
 
-      <OcrSummaryPanel summaries={analysis.ocr_summaries} />
+      {hasDocumentIntelligence ? <OcrSummaryPanel summaries={analysis.ocr_summaries} /> : null}
 
-      {isAwaitingProcessing ? (
-        <section className="awaiting-panel">
-          <Loader2 aria-hidden="true" size={24} className="spin-slow" />
-          <div>
-            <h2>Awaiting Processing Data</h2>
-            <p>OCR extraction and rules analysis have not finished for this application.</p>
+      <section className="review-grid">
+        <LabelViewer
+          activeImage={activeImage}
+          activeEvidence={hasDocumentIntelligence ? activeEvidence : null}
+          selectedRow={selectedRow}
+          evidenceIndex={activeEvidenceIndex}
+          setEvidenceIndex={(index) => setEvidenceIndex(applicationId, index)}
+          zoomed={zoomed}
+          setZoomed={setZoomed}
+          rotation={rotation}
+          rotateViewer={rotateViewer}
+          showEvidence={hasDocumentIntelligence}
+        />
+
+        <section className="review-list" aria-label="Review fields">
+          <div className="section-heading">
+            <h2>Application Fields</h2>
+            <span>{analysis.review_rows.length} fields</span>
           </div>
-        </section>
-      ) : (
-        <section className="review-grid">
-          <LabelViewer
-            activeImage={activeImage}
-            activeEvidence={activeEvidence}
-            selectedRow={selectedRow}
-            evidenceIndex={activeEvidenceIndex}
-            setEvidenceIndex={(index) => setEvidenceIndex(applicationId, index)}
-            zoomed={zoomed}
-            setZoomed={setZoomed}
-            rotation={rotation}
-            rotateViewer={rotateViewer}
-          />
-
-          <section className="review-list" aria-label="Review fields">
-            <div className="section-heading">
-              <h2>Review Fields</h2>
-              <span>{analysis.review_rows.length} fields</span>
-            </div>
-            {analysis.review_rows.map((row) => (
-              <article
-                className={`review-row ${row.field_key === selectedRow?.field_key ? "selected" : ""} ${
-                  row.issues.length > 0 || row.extraction_status !== "found" ? "needs-attention" : ""
-                }`}
-                key={row.field_key}
-              >
-                <div className="review-row-header">
-                  <div>
-                    <h3>{row.field_label}</h3>
-                    <span>{extractionLabel(row)}</span>
-                  </div>
+          {analysis.review_rows.map((row) => (
+            <article
+              className={`review-row ${row.field_key === selectedRow?.field_key ? "selected" : ""} ${
+                hasDocumentIntelligence && (row.issues.length > 0 || row.extraction_status !== "found")
+                  ? "needs-attention"
+                  : ""
+              }`}
+              key={row.field_key}
+            >
+              <div className="review-row-header">
+                <div>
+                  <h3>{row.field_label}</h3>
+                  {hasDocumentIntelligence ? <span>{extractionLabel(row)}</span> : null}
+                </div>
+                {hasDocumentIntelligence ? (
                   <span className={confidenceClass(row)}>
                     {typeof row.confidence === "number" ? `${row.confidence}%` : "No OCR"}
                   </span>
+                ) : null}
+              </div>
+              <dl className="row-values">
+                <div>
+                  <dt>Application</dt>
+                  <dd>{row.submitted_value || "Not provided"}</dd>
                 </div>
-                <dl className="row-values">
-                  <div>
-                    <dt>Application</dt>
-                    <dd>{row.submitted_value || "Not provided"}</dd>
-                  </div>
+                {hasDocumentIntelligence ? (
                   <div>
                     <dt>AI found</dt>
                     <dd>{row.extracted_value || "Not found"}</dd>
                   </div>
-                </dl>
-                <p className="row-explanation">{row.explanation}</p>
-                {row.issues.length > 0 ? (
-                  <div className="row-message">
-                    <AlertTriangle aria-hidden="true" size={16} />
-                    {row.issues[0]}
-                  </div>
                 ) : null}
-                {row.evidence.length > 1 ? (
-                  <p className="multi-evidence-note">
-                    Found on {row.evidence.length} images. Use Back / Next on the image panel.
-                  </p>
-                ) : null}
-                <div className="row-actions">
+              </dl>
+              {hasDocumentIntelligence ? <p className="row-explanation">{row.explanation}</p> : null}
+              {hasDocumentIntelligence && row.issues.length > 0 ? (
+                <div className="row-message">
+                  <AlertTriangle aria-hidden="true" size={16} />
+                  {row.issues[0]}
+                </div>
+              ) : null}
+              {hasDocumentIntelligence && row.evidence.length > 1 ? (
+                <p className="multi-evidence-note">
+                  Found on {row.evidence.length} images. Use Back / Next on the image panel.
+                </p>
+              ) : null}
+              <div className="row-actions">
+                {hasDocumentIntelligence ? (
                   <button
                     className="secondary-button compact"
                     disabled={row.evidence.length === 0}
@@ -248,37 +249,39 @@ export function ReviewWorkspace({ applicationId }: { applicationId: string }) {
                     <Eye aria-hidden="true" size={17} />
                     Show on label
                   </button>
-                  <button
-                    className="icon-text-button"
-                    onClick={() => setHelpFieldKey(row.field_key)}
-                    aria-label={`Requirement help for ${row.field_label}`}
-                  >
-                    <CircleHelp aria-hidden="true" size={18} />
-                    Requirement
-                  </button>
-                </div>
-              </article>
-            ))}
-          </section>
+                ) : null}
+                <button
+                  className="icon-text-button"
+                  onClick={() => setHelpFieldKey(row.field_key)}
+                  aria-label={`Requirement help for ${row.field_label}`}
+                >
+                  <CircleHelp aria-hidden="true" size={18} />
+                  Requirement
+                </button>
+              </div>
+            </article>
+          ))}
         </section>
-      )}
+      </section>
 
       <section className="bottom-review">
         <ReadOnlyNotes
           title="Specialist Notes"
           items={analysis.application.specialist_notes ? [analysis.application.specialist_notes] : []}
         />
-        <ReadOnlyNotes
-          title="Validation Notes"
-          items={
-            analysis.validation_results.length
-              ? analysis.validation_results.map(
-                  (result) =>
-                    `${result.check_label}: ${result.result_status}${result.message ? ` - ${result.message}` : ""}`
-                )
-              : ["No validation output is available yet."]
-          }
-        />
+        {hasDocumentIntelligence ? (
+          <ReadOnlyNotes
+            title="Validation Notes"
+            items={
+              analysis.validation_results.length
+                ? analysis.validation_results.map(
+                    (result) =>
+                      `${result.check_label}: ${result.result_status}${result.message ? ` - ${result.message}` : ""}`
+                  )
+                : []
+            }
+          />
+        ) : null}
         <ReadOnlyNotes
           title="Submitted Data"
           items={Object.entries(analysis.application.submitted_data).map(([key, value]) => `${key}: ${value}`)}
@@ -397,7 +400,8 @@ function LabelViewer({
   zoomed,
   setZoomed,
   rotation,
-  rotateViewer
+  rotateViewer,
+  showEvidence
 }: {
   activeImage: ApplicationImageRecord | null;
   activeEvidence: EvidenceView | null;
@@ -408,19 +412,24 @@ function LabelViewer({
   setZoomed: (value: boolean) => void;
   rotation: number;
   rotateViewer: () => void;
+  showEvidence: boolean;
 }) {
   const evidenceCount = selectedRow?.evidence.length ?? 0;
-  const canGoBack = evidenceIndex > 0;
-  const canGoNext = evidenceIndex < evidenceCount - 1;
+  const canGoBack = showEvidence && evidenceIndex > 0;
+  const canGoNext = showEvidence && evidenceIndex < evidenceCount - 1;
 
   return (
     <section className="label-viewer" aria-label="Label image viewer">
       <div className="section-heading">
         <div>
           <h2>{activeImage?.original_filename ?? "Label unavailable"}</h2>
-          <span>
-            {evidenceCount > 0 ? `Image ${evidenceIndex + 1} of ${evidenceCount}` : "No evidence"}
-          </span>
+          {showEvidence ? (
+            <span>
+              {evidenceCount > 0 ? `Image ${evidenceIndex + 1} of ${evidenceCount}` : "No evidence"}
+            </span>
+          ) : (
+            <span>{activeImage?.label_type ?? "Uploaded label"}</span>
+          )}
         </div>
         <div className="viewer-tools">
           <button
@@ -458,21 +467,25 @@ function LabelViewer({
         )}
       </div>
 
-      <div className="evidence-controls">
-        <button className="secondary-button compact" disabled={!canGoBack} onClick={() => setEvidenceIndex(evidenceIndex - 1)}>
-          <ChevronLeft aria-hidden="true" size={18} />
-          Back
-        </button>
-        <button className="secondary-button compact" disabled={!canGoNext} onClick={() => setEvidenceIndex(evidenceIndex + 1)}>
-          Next
-          <ChevronRight aria-hidden="true" size={18} />
-        </button>
-      </div>
+      {showEvidence ? (
+        <>
+          <div className="evidence-controls">
+            <button className="secondary-button compact" disabled={!canGoBack} onClick={() => setEvidenceIndex(evidenceIndex - 1)}>
+              <ChevronLeft aria-hidden="true" size={18} />
+              Back
+            </button>
+            <button className="secondary-button compact" disabled={!canGoNext} onClick={() => setEvidenceIndex(evidenceIndex + 1)}>
+              Next
+              <ChevronRight aria-hidden="true" size={18} />
+            </button>
+          </div>
 
-      <div className="highlighted-text">
-        <strong>Highlighted text</strong>
-        <p>{activeEvidence?.text ?? "No OCR evidence selected."}</p>
-      </div>
+          <div className="highlighted-text">
+            <strong>Highlighted text</strong>
+            <p>{activeEvidence?.text ?? "No OCR evidence selected."}</p>
+          </div>
+        </>
+      ) : null}
     </section>
   );
 }
