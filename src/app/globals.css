@@ -799,8 +799,9 @@ input[type="checkbox"] {
 }
 
 .image-stage {
-  overflow: auto;
+  overflow: hidden;
   display: grid;
+  height: min(70vh, 640px);
   min-height: 420px;
   place-items: center;
   border: 1px solid var(--line);
@@ -808,15 +809,31 @@ input[type="checkbox"] {
   background: #e8eeee;
 }
 
+.image-transform-wrapper {
+  width: 100% !important;
+  height: 100% !important;
+  cursor: grab;
+  touch-action: none;
+}
+
+.image-transform-wrapper:active {
+  cursor: grabbing;
+}
+
+.image-transform-content {
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-width: 100%;
+  min-height: 100%;
+  padding: 48px;
+}
+
 .image-frame {
   position: relative;
   width: min(100%, 720px);
   aspect-ratio: 3 / 2;
   transition: transform 160ms ease;
-}
-
-.image-stage.zoomed .image-frame {
-  width: 960px;
 }
 
 .image-frame img {

@@ -70,7 +70,6 @@ type ApplicationStore = {
   activeFieldByApplicationId: Record<string, keyof SubmittedApplicationData | undefined>;
   evidenceIndexByApplicationId: Record<string, number>;
   helpFieldKey: keyof SubmittedApplicationData | null;
-  zoomed: boolean;
   rotation: number;
   initializeDatabase: () => Promise<void>;
   subscribeToDatabase: () => () => void;
@@ -95,7 +94,6 @@ type ApplicationStore = {
   setActiveField: (applicationId: string, fieldKey: keyof SubmittedApplicationData) => void;
   setEvidenceIndex: (applicationId: string, index: number) => void;
   setHelpFieldKey: (fieldKey: keyof SubmittedApplicationData | null) => void;
-  setZoomed: (zoomed: boolean) => void;
   rotateViewer: () => void;
   resetSeedData: () => Promise<void>;
 };
@@ -148,7 +146,6 @@ export const useApplicationStore = create<ApplicationStore>((set, get) => ({
   activeFieldByApplicationId: {},
   evidenceIndexByApplicationId: {},
   helpFieldKey: null,
-  zoomed: false,
   rotation: 0,
   initializeDatabase: async () => {
     set({ isDatabaseLoading: true, databaseError: null });
@@ -325,7 +322,6 @@ export const useApplicationStore = create<ApplicationStore>((set, get) => ({
       }
     })),
   setHelpFieldKey: (fieldKey) => set({ helpFieldKey: fieldKey }),
-  setZoomed: (zoomed) => set({ zoomed }),
   rotateViewer: () => set((state) => ({ rotation: (state.rotation + 90) % 360 })),
   resetSeedData: async () => {
     try {
@@ -339,7 +335,6 @@ export const useApplicationStore = create<ApplicationStore>((set, get) => ({
         activeFieldByApplicationId: {},
         evidenceIndexByApplicationId: {},
         helpFieldKey: null,
-        zoomed: false,
         rotation: 0
       });
       await get().initializeDatabase();

@@ -22,6 +22,7 @@
     "react": "latest",
     "react-dom": "latest",
     "react-toastify": "^11.1.0",
+    "react-zoom-pan-pinch": "^4.0.3",
     "zustand": "latest"
   },
   "devDependencies": {

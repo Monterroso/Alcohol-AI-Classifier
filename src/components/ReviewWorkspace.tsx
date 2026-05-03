@@ -9,11 +9,10 @@ import {
   ChevronRight,
   CircleHelp,
   Eye,
-  Minimize2,
   RotateCw,
-  XCircle,
-  ZoomIn
+  XCircle
 } from "lucide-react";
+import { TransformComponent, TransformWrapper } from "react-zoom-pan-pinch";
 
 import { getReviewAnalysis } from "@/features/applications/selectors";
 import { useApplicationStore } from "@/features/applications/store";
@@ -76,14 +75,12 @@ export function ReviewWorkspace({ applicationId }: { applicationId: string }) {
   const activeFieldByApplicationId = useApplicationStore((state) => state.activeFieldByApplicationId);
   const evidenceIndexByApplicationId = useApplicationStore((state) => state.evidenceIndexByApplicationId);
   const helpFieldKey = useApplicationStore((state) => state.helpFieldKey);
-  const zoomed = useApplicationStore((state) => state.zoomed);
   const rotation = useApplicationStore((state) => state.rotation);
   const reviewNotes = useApplicationStore((state) => state.reviewNotesByApplicationId[applicationId] ?? "");
   const setReviewNotes = useApplicationStore((state) => state.setReviewNotes);
   const setActiveField = useApplicationStore((state) => state.setActiveField);
   const setEvidenceIndex = useApplicationStore((state) => state.setEvidenceIndex);
   const setHelpFieldKey = useApplicationStore((state) => state.setHelpFieldKey);
-  const setZoomed = useApplicationStore((state) => state.setZoomed);
   const rotateViewer = useApplicationStore((state) => state.rotateViewer);
   const openDecisionModal = useApplicationStore((state) => state.openDecisionModal);
 
@@ -217,8 +214,6 @@ export function ReviewWorkspace({ applicationId }: { applicationId: string }) {
           selectedRow={selectedRow}
           evidenceIndex={activeEvidenceIndex}
           setEvidenceIndex={(index) => setEvidenceIndex(applicationId, index)}
-          zoomed={zoomed}
-          setZoomed={setZoomed}
           rotation={rotation}
           rotateViewer={rotateViewer}
           showEvidence={hasDocumentIntelligence}
@@ -434,8 +429,6 @@ function LabelViewer({
   selectedRow,
   evidenceIndex,
   setEvidenceIndex,
-  zoomed,
-  setZoomed,
   rotation,
   rotateViewer,
   showEvidence
@@ -448,8 +441,6 @@ function LabelViewer({
   selectedRow: ReviewFieldRow | null;
   evidenceIndex: number;
   setEvidenceIndex: (index: number) => void;
-  zoomed: boolean;
-  setZoomed: (value: boolean) => void;
   rotation: number;
   rotateViewer: () => void;
   showEvidence: boolean;
@@ -490,36 +481,47 @@ function LabelViewer({
           >
             <ChevronRight aria-hidden="true" size={18} />
           </button>
-          <button
-            className="icon-button"
-            onClick={() => setZoomed(!zoomed)}
-            aria-label={zoomed ? "Fit to screen" : "Zoom in"}
-            title={zoomed ? "Fit to screen" : "Zoom in"}
-          >
-            {zoomed ? <Minimize2 aria-hidden="true" size={18} /> : <ZoomIn aria-hidden="true" size={18} />}
-          </button>
           <button className="icon-button" onClick={rotateViewer} aria-label="Rotate label" title="Rotate label">
             <RotateCw aria-hidden="true" size={18} />
           </button>
         </div>
       </div>
 
-      <div className={`image-stage ${zoomed ? "zoomed" : ""}`}>
+      <div className="image-stage">
         {activeImage ? (
-          <div className="image-frame" style={{ transform: `rotate(${rotation}deg)` }}>
-            <img src={activeImage.image_url} alt={activeImage.original_filename ?? activeImage.label_type} />
-            {activeEvidence ? (
-              <div
-                className="ocr-highlight"
-                style={{
-                  left: `${activeEvidence.bbox.x}%`,
-                  top: `${activeEvidence.bbox.y}%`,
-                  width: `${activeEvidence.bbox.width}%`,
-                  height: `${activeEvidence.bbox.height}%`
-                }}
-              />
-            ) : null}
-          </div>
+          <TransformWrapper
+            key={activeImage.id}
+            centerOnInit
+            centerZoomedOut
+            limitToBounds={false}
+            minScale={1}
+            maxScale={6}
+            smooth
+            wheel={{ step: 0.0015 }}
+            autoAlignment={{ disabled: true }}
+            doubleClick={{ mode: "reset", animationTime: 180, animationType: "easeOut" }}
+            panning={{ allowLeftClickPan: true, velocityDisabled: true }}
+          >
+            <TransformComponent
+              wrapperClass="image-transform-wrapper"
+              contentClass="image-transform-content"
+            >
+              <div className="image-frame" style={{ transform: `rotate(${rotation}deg)` }}>
+                <img src={activeImage.image_url} alt={activeImage.original_filename ?? activeImage.label_type} />
+                {activeEvidence ? (
+                  <div
+                    className="ocr-highlight"
+                    style={{
+                      left: `${activeEvidence.bbox.x}%`,
+                      top: `${activeEvidence.bbox.y}%`,
+                      width: `${activeEvidence.bbox.width}%`,
+                      height: `${activeEvidence.bbox.height}%`
+                    }}
+                  />
+                ) : null}
+              </div>
+            </TransformComponent>
+          </TransformWrapper>
         ) : (
           <div className="missing-image">Image unavailable</div>
         )}
