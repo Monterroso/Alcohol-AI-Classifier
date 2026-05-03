@@ -22,7 +22,8 @@ import {
   type ApplicationImageRecord,
   type EvidenceView,
   type OcrImageSummary,
-  type ReviewFieldRow
+  type ReviewFieldRow,
+  type ReviewStatus
 } from "@/features/applications/types";
 
 import { DecisionModal } from "./DecisionModal";
@@ -58,6 +59,14 @@ function formatOcrConfidence(confidence?: number) {
     return "No confidence";
   }
   return `${confidence}% confidence`;
+}
+
+function isFinalReviewStatus(status?: ReviewStatus): status is "approved" | "rejected" {
+  return status === "approved" || status === "rejected";
+}
+
+function finalDecisionLabel(decision: "approved" | "rejected") {
+  return decision === "approved" ? "Approved" : "Rejected";
 }
 
 export function ReviewWorkspace({ applicationId }: { applicationId: string }) {
@@ -118,6 +127,12 @@ export function ReviewWorkspace({ applicationId }: { applicationId: string }) {
     ? fieldDefinitions.find((definition) => definition.key === helpFieldKey)
     : null;
   const isAwaitingProcessing = analysis.application.processing_status !== "processed";
+  const persistedFinalDecision = isFinalReviewStatus(analysis.application.review_status)
+    ? analysis.application.review_status
+    : null;
+  const localFinalDecision = isFinalReviewStatus(submittedDecision) ? submittedDecision : null;
+  const finalDecision = persistedFinalDecision ?? localFinalDecision;
+  const isFinalized = Boolean(finalDecision);
 
   return (
     <main className="page-shell">
@@ -142,11 +157,8 @@ export function ReviewWorkspace({ applicationId }: { applicationId: string }) {
         </div>
       </header>
 
-      {submittedDecision ? (
-        <div className="success-strip">
-          <CheckCircle2 aria-hidden="true" size={18} />
-          Decision submitted: {submittedDecision === "approved" ? "Approved" : "Rejected"}
-        </div>
+      {finalDecision ? (
+        <FinalDecisionBanner decision={finalDecision} />
       ) : null}
 
       {analysis.issues.length > 0 ? (
@@ -276,25 +288,38 @@ export function ReviewWorkspace({ applicationId }: { applicationId: string }) {
           <textarea
             value={reviewNotes}
             onChange={(event) => setReviewNotes(applicationId, event.target.value)}
+            disabled={isFinalized}
             rows={6}
-            placeholder="Add reviewer notes"
+            placeholder={isFinalized ? "Decision is locked" : "Add reviewer notes"}
           />
         </section>
       </section>
 
-      <section className="decision-bar" aria-label="Final decision">
+      <section className={`decision-bar ${isFinalized ? "decision-bar-locked" : ""}`} aria-label="Final decision">
         <div>
-          <strong>Final Decision</strong>
-          <span>The reviewer has final discretion.</span>
+          <strong>{isFinalized ? "Decision Locked" : "Final Decision"}</strong>
+          <span>
+            {isFinalized && finalDecision
+              ? `This application was ${finalDecisionLabel(finalDecision).toLowerCase()} and can no longer be modified.`
+              : "The reviewer has final discretion."}
+          </span>
         </div>
         <div className="decision-actions">
-          <button className="primary-button" onClick={() => openDecisionModal("single", [applicationId], "approved")}>
+          <button
+            className="primary-button"
+            disabled={isFinalized}
+            onClick={() => openDecisionModal("single", [applicationId], "approved")}
+          >
             <CheckCircle2 aria-hidden="true" size={18} />
-            Approve Application
+            {isFinalized ? "Approval Locked" : "Approve Application"}
           </button>
-          <button className="danger-button" onClick={() => openDecisionModal("single", [applicationId], "rejected")}>
+          <button
+            className="danger-button"
+            disabled={isFinalized}
+            onClick={() => openDecisionModal("single", [applicationId], "rejected")}
+          >
             <XCircle aria-hidden="true" size={18} />
-            Reject Application
+            {isFinalized ? "Rejection Locked" : "Reject Application"}
           </button>
         </div>
       </section>
@@ -315,6 +340,25 @@ export function ReviewWorkspace({ applicationId }: { applicationId: string }) {
 
       <DecisionModal />
     </main>
+  );
+}
+
+function FinalDecisionBanner({
+  decision
+}: {
+  decision: "approved" | "rejected";
+}) {
+  const isApproved = decision === "approved";
+
+  return (
+    <section className={`decision-status-strip decision-status-${decision}`} aria-label="Final review status">
+      {isApproved ? (
+        <CheckCircle2 aria-hidden="true" size={24} />
+      ) : (
+        <XCircle aria-hidden="true" size={24} />
+      )}
+      <strong>{isApproved ? "Approved" : "Rejected"}</strong>
+    </section>
   );
 }
 

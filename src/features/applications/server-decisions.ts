@@ -13,6 +13,28 @@ export async function decideApplications(input: {
   }
 
   const supabase = createServerSupabaseClient();
+  const { data: existingApplications, error: existingError } = await supabase
+    .from("applications")
+    .select("id, review_status")
+    .in("id", input.applicationIds);
+
+  if (existingError) {
+    throw new Error(existingError.message);
+  }
+
+  const existingIds = new Set((existingApplications ?? []).map((application) => application.id as string));
+  const missingIds = input.applicationIds.filter((applicationId) => !existingIds.has(applicationId));
+  if (missingIds.length > 0) {
+    throw new Error(`Application ${missingIds[0]} was not found.`);
+  }
+
+  const finalizedApplication = (existingApplications ?? []).find((application) =>
+    ["approved", "rejected"].includes(String(application.review_status))
+  );
+  if (finalizedApplication) {
+    throw new Error(`Application ${finalizedApplication.id} already has a final decision.`);
+  }
+
   const reviewStatus = input.decision === "approved" ? "approved" : input.decision;
   const timestamp = new Date().toISOString();
   const { error } = await supabase

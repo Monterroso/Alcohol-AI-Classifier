@@ -445,6 +445,16 @@ input[type="checkbox"] {
   font-weight: 800;
 }
 
+.decision-chip.decision-approved {
+  background: var(--green-bg);
+  color: var(--green) !important;
+}
+
+.decision-chip.decision-rejected {
+  background: var(--red-bg);
+  color: var(--red) !important;
+}
+
 .inline-error,
 .issue-strip,
 .success-strip,
@@ -487,6 +497,36 @@ input[type="checkbox"] {
 .warning-strip {
   background: var(--amber-bg);
   color: var(--amber);
+}
+
+.decision-status-strip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 18px;
+  border: 2px solid currentColor;
+  border-radius: 8px;
+  padding: 18px;
+  font-weight: 800;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.decision-status-strip strong {
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  line-height: 1;
+  letter-spacing: 0.08em;
+}
+
+.decision-status-approved {
+  background: var(--green-bg);
+  color: var(--green);
+}
+
+.decision-status-rejected {
+  background: var(--red-bg);
+  color: var(--red);
 }
 
 .upload-grid,
@@ -938,6 +978,12 @@ input[type="checkbox"] {
   z-index: 4;
   margin-top: 18px;
   box-shadow: var(--shadow);
+}
+
+.decision-bar-locked {
+  border-color: var(--line);
+  background: var(--surface-muted);
+  box-shadow: none;
 }
 
 .decision-bar strong,

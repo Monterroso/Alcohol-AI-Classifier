@@ -21,6 +21,7 @@
     "pg": "^8.20.0",
     "react": "latest",
     "react-dom": "latest",
+    "react-toastify": "^11.1.0",
     "zustand": "latest"
   },
   "devDependencies": {

@@ -47,6 +47,11 @@ type DecisionModal =
     }
   | null;
 
+type DecisionResult = {
+  applicationIds: string[];
+  decision: Decision;
+};
+
 type ApplicationStore = {
   database: ApplicationDatabase;
   isDatabaseLoading: boolean;
@@ -86,7 +91,7 @@ type ApplicationStore = {
   openDecisionModal: (scope: "single" | "batch", applicationIds: string[], decision: Decision) => void;
   closeDecisionModal: () => void;
   setDecisionNotes: (notes: string) => void;
-  submitDecision: () => Promise<void>;
+  submitDecision: () => Promise<DecisionResult | null>;
   setReviewNotes: (applicationId: string, notes: string) => void;
   setActiveField: (applicationId: string, fieldKey: keyof SubmittedApplicationData) => void;
   setEvidenceIndex: (applicationId: string, index: number) => void;
@@ -277,7 +282,7 @@ export const useApplicationStore = create<ApplicationStore>((set, get) => ({
   submitDecision: async () => {
     const state = get();
     if (!state.decisionModal) {
-      return;
+      return null;
     }
 
     const { applicationIds, decision } = state.decisionModal;
@@ -294,8 +299,10 @@ export const useApplicationStore = create<ApplicationStore>((set, get) => ({
         databaseError: null
       });
       await get().initializeDatabase();
+      return { applicationIds, decision };
     } catch (error) {
       set({ databaseError: errorMessage(error) });
+      throw error;
     }
   },
   setReviewNotes: (applicationId, notes) =>

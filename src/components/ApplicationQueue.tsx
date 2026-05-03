@@ -65,6 +65,10 @@ function reviewLabel(status: ReviewStatus) {
   }
 }
 
+function isFinalReviewStatus(status: ReviewStatus) {
+  return status === "approved" || status === "rejected";
+}
+
 function confidenceTone(application: QueueItem) {
   if (application.processing_status !== "processed") {
     return "awaiting";
@@ -105,8 +109,11 @@ export function ApplicationQueue() {
   const openDecisionModal = useApplicationStore((state) => state.openDecisionModal);
 
   const applications = listQueueItems(database, queueSort, queueFilter);
-  const visibleIds = applications.map((application) => application.id);
-  const selectedVisibleCount = visibleIds.filter((id) => selectedApplicationIds.includes(id)).length;
+  const visibleActionableIds = applications
+    .filter((application) => !isFinalReviewStatus(application.review_status))
+    .map((application) => application.id);
+  const selectedVisibleCount = visibleActionableIds.filter((id) => selectedApplicationIds.includes(id)).length;
+  const selectedActionableIds = selectedApplicationIds.filter((id) => visibleActionableIds.includes(id));
   const highConfidenceCount = applications.filter(
     (application) => confidenceTone(application) === "high"
   ).length;
@@ -166,19 +173,19 @@ export function ApplicationQueue() {
         <div className="queue-actions">
           <button
             className="primary-button"
-            disabled={selectedApplicationIds.length === 0}
-            onClick={() => openDecisionModal("batch", selectedApplicationIds, "approved")}
+            disabled={selectedActionableIds.length === 0}
+            onClick={() => openDecisionModal("batch", selectedActionableIds, "approved")}
           >
             <CheckCircle2 aria-hidden="true" size={18} />
-            Approve Selected ({selectedApplicationIds.length})
+            Approve Selected ({selectedActionableIds.length})
           </button>
           <button
             className="danger-button"
-            disabled={selectedApplicationIds.length === 0}
-            onClick={() => openDecisionModal("batch", selectedApplicationIds, "rejected")}
+            disabled={selectedActionableIds.length === 0}
+            onClick={() => openDecisionModal("batch", selectedActionableIds, "rejected")}
           >
             <Ban aria-hidden="true" size={18} />
-            Reject Selected ({selectedApplicationIds.length})
+            Reject Selected ({selectedActionableIds.length})
           </button>
         </div>
       </section>
@@ -188,9 +195,9 @@ export function ApplicationQueue() {
           <label className="checkbox-cell">
             <input
               type="checkbox"
-              checked={visibleIds.length > 0 && selectedVisibleCount === visibleIds.length}
-              disabled={visibleIds.length === 0}
-              onChange={() => toggleVisibleApplications(visibleIds)}
+              checked={visibleActionableIds.length > 0 && selectedVisibleCount === visibleActionableIds.length}
+              disabled={visibleActionableIds.length === 0}
+              onChange={() => toggleVisibleApplications(visibleActionableIds)}
               aria-label="Select all visible applications"
             />
           </label>
@@ -215,55 +222,62 @@ export function ApplicationQueue() {
           <div className="loading-panel">No applications match this filter.</div>
         ) : null}
 
-        {applications.map((application) => (
-          <article className="queue-row" key={application.id}>
-            <label className="checkbox-cell">
-              <input
-                type="checkbox"
-                checked={selectedApplicationIds.includes(application.id)}
-                onChange={() => toggleSelectedApplication(application.id)}
-                aria-label={`Select ${application.product_name}`}
-              />
-            </label>
-            <div>
-              <strong>{application.product_name}</strong>
-              <span>{application.applicant_name}</span>
-              <span>{application.application_type}</span>
-              {application.review_status !== "unreviewed" ? (
-                <span className="decision-chip">Decision: {reviewLabel(application.review_status)}</span>
-              ) : null}
-            </div>
-            <div>
-              <div className={`verification-pill verification-${confidenceTone(application)}`}>
-                {statusIcon(application)}
-                {processingLabel(application.processing_status)}
+        {applications.map((application) => {
+          const isFinalized = isFinalReviewStatus(application.review_status);
+
+          return (
+            <article className="queue-row" key={application.id}>
+              <label className="checkbox-cell">
+                <input
+                  type="checkbox"
+                  checked={!isFinalized && selectedApplicationIds.includes(application.id)}
+                  disabled={isFinalized}
+                  onChange={() => toggleSelectedApplication(application.id)}
+                  aria-label={`Select ${application.product_name}`}
+                />
+              </label>
+              <div>
+                <strong>{application.product_name}</strong>
+                <span>{application.applicant_name}</span>
+                <span>{application.application_type}</span>
+                {application.review_status !== "unreviewed" ? (
+                  <span className={`decision-chip decision-${application.review_status}`}>
+                    Decision: {reviewLabel(application.review_status)}
+                  </span>
+                ) : null}
               </div>
-              <span>{application.status_message}</span>
-            </div>
-            <span>
-              {application.verified_fields}/{application.total_fields} verified
-              {typeof application.average_confidence === "number"
-                ? ` - ${application.average_confidence}% avg`
-                : " - awaiting OCR"}
-            </span>
-            <span>
-              <CircleDot aria-hidden="true" size={16} />
-              {application.label_count}
-            </span>
-            <span>
-              {new Intl.DateTimeFormat("en-US", {
-                dateStyle: "medium",
-                timeStyle: "short"
-              }).format(new Date(application.received_at))}
-            </span>
-            <div>
-              <Link className="primary-link-button" href={`/applications/${application.id}/review`}>
-                <FileSearch aria-hidden="true" size={18} />
-                Review
-              </Link>
-            </div>
-          </article>
-        ))}
+              <div>
+                <div className={`verification-pill verification-${confidenceTone(application)}`}>
+                  {statusIcon(application)}
+                  {processingLabel(application.processing_status)}
+                </div>
+                <span>{application.status_message}</span>
+              </div>
+              <span>
+                {application.verified_fields}/{application.total_fields} verified
+                {typeof application.average_confidence === "number"
+                  ? ` - ${application.average_confidence}% avg`
+                  : " - awaiting OCR"}
+              </span>
+              <span>
+                <CircleDot aria-hidden="true" size={16} />
+                {application.label_count}
+              </span>
+              <span>
+                {new Intl.DateTimeFormat("en-US", {
+                  dateStyle: "medium",
+                  timeStyle: "short"
+                }).format(new Date(application.received_at))}
+              </span>
+              <div>
+                <Link className="primary-link-button" href={`/applications/${application.id}/review`}>
+                  <FileSearch aria-hidden="true" size={18} />
+                  Review
+                </Link>
+              </div>
+            </article>
+          );
+        })}
       </section>
 
       <DecisionModal />

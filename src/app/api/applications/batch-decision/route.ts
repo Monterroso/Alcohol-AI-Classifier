@@ -23,9 +23,10 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to save decision.";
     return NextResponse.json(
-      { ok: false, error: error instanceof Error ? error.message : "Failed to save decision." },
-      { status: 500 }
+      { ok: false, error: message },
+      { status: message.includes("final decision") ? 409 : 500 }
     );
   }
 }
