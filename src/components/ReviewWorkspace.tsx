@@ -15,7 +15,7 @@ import {
   ZoomIn
 } from "lucide-react";
 
-import { getReviewAnalysis } from "@/features/applications/mock-repository";
+import { getReviewAnalysis } from "@/features/applications/selectors";
 import { useApplicationStore } from "@/features/applications/store";
 import {
   fieldDefinitions,

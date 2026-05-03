@@ -1,19 +1,23 @@
 import { NextResponse } from "next/server";
 
-import { listQueueItems, submitBatchApplications } from "@/features/applications/mock-repository";
-import { readServerDatabase, writeServerDatabase } from "@/features/applications/server-database";
-import type { SubmitBatchApplicationInput } from "@/features/applications/types";
-
-type BatchUploadRequest = {
-  applications: SubmitBatchApplicationInput[];
-};
+import { createBatchApplications } from "@/features/applications/server-repository";
 
 export async function POST(request: Request) {
-  const body = (await request.json()) as BatchUploadRequest;
-  const nextDatabase = submitBatchApplications(readServerDatabase(), body.applications ?? []);
-  writeServerDatabase(nextDatabase);
+  try {
+    const formData = await request.formData();
+    const zipFile = formData.get("zip");
+    const csvFile = formData.get("csv");
 
-  return NextResponse.json({
-    applications: listQueueItems(nextDatabase, "created_at", "all")
-  });
+    if (!(zipFile instanceof File) || !(csvFile instanceof File)) {
+      return NextResponse.json({ ok: false, error: "A ZIP file and CSV file are required." }, { status: 400 });
+    }
+
+    const result = await createBatchApplications({ zipFile, csvFile });
+    return NextResponse.json({ ok: true, ...result });
+  } catch (error) {
+    return NextResponse.json(
+      { ok: false, error: error instanceof Error ? error.message : "Failed to submit batch." },
+      { status: 500 }
+    );
+  }
 }

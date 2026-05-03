@@ -9,12 +9,11 @@ import {
   CircleDot,
   FileSearch,
   Loader2,
-  RefreshCw,
   ShieldCheck,
   Upload
 } from "lucide-react";
 
-import { listQueueItems } from "@/features/applications/mock-repository";
+import { listQueueItems } from "@/features/applications/selectors";
 import { useApplicationStore } from "@/features/applications/store";
 import type { ProcessingStatus, QueueFilterKey, QueueItem, QueueSortKey, ReviewStatus } from "@/features/applications/types";
 
@@ -104,7 +103,6 @@ export function ApplicationQueue() {
   const toggleSelectedApplication = useApplicationStore((state) => state.toggleSelectedApplication);
   const toggleVisibleApplications = useApplicationStore((state) => state.toggleVisibleApplications);
   const openDecisionModal = useApplicationStore((state) => state.openDecisionModal);
-  const runProcessingCycle = useApplicationStore((state) => state.runProcessingCycle);
 
   const applications = listQueueItems(database, queueSort, queueFilter);
   const visibleIds = applications.map((application) => application.id);
@@ -129,10 +127,6 @@ export function ApplicationQueue() {
             <Upload aria-hidden="true" size={18} />
             Upload
           </Link>
-          <button className="secondary-button" onClick={runProcessingCycle}>
-            <RefreshCw aria-hidden="true" size={18} />
-            Process next
-          </button>
         </div>
       </header>
 

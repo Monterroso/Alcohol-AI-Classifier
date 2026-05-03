@@ -15,6 +15,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.105.1",
     "clsx": "latest",
+    "jszip": "^3.10.1",
     "lucide-react": "latest",
     "next": "latest",
     "pg": "^8.20.0",

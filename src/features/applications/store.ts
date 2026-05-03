@@ -3,14 +3,16 @@
 import { create } from "zustand";
 
 import {
-  emptyDatabaseSnapshot,
   fetchApplicationDatabase,
-  insertBatchApplications,
-  insertSingleApplication,
-  processNextPendingApplication,
-  subscribeToApplicationTables,
-  updateApplicationsDecision
+  resetApplicationSeedData,
+  submitApplicationDecision,
+  submitBatchApplication,
+  submitSingleApplication
+} from "./api-client";
+import {
+  subscribeToApplicationTables
 } from "./supabase-database";
+import { createEmptyDatabase } from "./empty-database";
 import {
   emptySubmittedData,
   type ApplicationDatabase,
@@ -18,25 +20,18 @@ import {
   type LabelType,
   type QueueFilterKey,
   type QueueSortKey,
-  type SubmitBatchApplicationInput,
-  type SubmittedApplicationData,
-  type UploadImageInput
+  type SubmittedApplicationData
 } from "./types";
 
 export type UploadMode = "single" | "batch";
 
 export type UploadImageDraft = {
   id: string;
+  file: File;
   label_type: LabelType;
   preview_url: string;
   original_filename: string;
   mime_type: string;
-};
-
-export type BatchUploadDraftRow = {
-  id: string;
-  submitted_data: SubmittedApplicationData;
-  images: UploadImageInput[];
 };
 
 type DecisionModal =
@@ -59,9 +54,8 @@ type ApplicationStore = {
   uploadMode: UploadMode;
   singleForm: SubmittedApplicationData;
   singleImages: UploadImageDraft[];
-  batchZipName: string;
-  batchCsvName: string;
-  batchRows: BatchUploadDraftRow[];
+  batchZipFile?: File;
+  batchCsvFile?: File;
   queueSort: QueueSortKey;
   queueFilter: QueueFilterKey;
   selectedApplicationIds: string[];
@@ -82,8 +76,8 @@ type ApplicationStore = {
   updateSingleImageLabel: (imageId: string, labelType: LabelType) => void;
   removeSingleImage: (imageId: string) => void;
   submitSingleUpload: () => Promise<void>;
-  setBatchZipName: (name: string) => void;
-  setBatchCsvName: (name: string) => void;
+  setBatchZipFile: (file?: File) => void;
+  setBatchCsvFile: (file?: File) => void;
   submitBatchUpload: () => Promise<void>;
   setQueueSort: (sort: QueueSortKey) => void;
   setQueueFilter: (filter: QueueFilterKey) => void;
@@ -99,7 +93,7 @@ type ApplicationStore = {
   setHelpFieldKey: (fieldKey: keyof SubmittedApplicationData | null) => void;
   setZoomed: (zoomed: boolean) => void;
   rotateViewer: () => void;
-  runProcessingCycle: () => Promise<void>;
+  resetSeedData: () => Promise<void>;
 };
 
 let refreshTimer: ReturnType<typeof setTimeout> | undefined;
@@ -128,29 +122,19 @@ function fileListToArray(files: FileList | File[]) {
   return Array.from(files);
 }
 
-function draftToImageInput(image: UploadImageDraft): UploadImageInput {
-  return {
-    label_type: image.label_type,
-    image_url: image.preview_url,
-    original_filename: image.original_filename,
-    mime_type: image.mime_type
-  };
-}
-
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "The application database request failed.";
 }
 
 export const useApplicationStore = create<ApplicationStore>((set, get) => ({
-  database: emptyDatabaseSnapshot(),
+  database: createEmptyDatabase(),
   isDatabaseLoading: false,
   databaseError: null,
   uploadMode: "single",
   singleForm: { ...emptySubmittedData },
   singleImages: [],
-  batchZipName: "",
-  batchCsvName: "",
-  batchRows: [],
+  batchZipFile: undefined,
+  batchCsvFile: undefined,
   queueSort: "created_at",
   queueFilter: "all",
   selectedApplicationIds: [],
@@ -196,6 +180,7 @@ export const useApplicationStore = create<ApplicationStore>((set, get) => ({
         ...state.singleImages,
         ...fileListToArray(files).map((file) => ({
           id: createDraftId("draft-image"),
+          file,
           label_type: "front" as const,
           preview_url: URL.createObjectURL(file),
           original_filename: file.name,
@@ -216,20 +201,19 @@ export const useApplicationStore = create<ApplicationStore>((set, get) => ({
   submitSingleUpload: async () => {
     const state = get();
     const submittedData = sanitizeSubmittedData(state.singleForm);
-    const images = state.singleImages.map(draftToImageInput);
 
-    if (images.length === 0) {
+    if (state.singleImages.length === 0) {
       return;
     }
 
     try {
-      await insertSingleApplication(
-        {
-          submitted_data: submittedData,
-          images
-        },
-        state.database.applications.length
-      );
+      await submitSingleApplication({
+        submittedData,
+        images: state.singleImages.map((image) => ({
+          file: image.file,
+          labelType: image.label_type
+        }))
+      });
       set({
         singleForm: { ...emptySubmittedData },
         singleImages: [],
@@ -242,27 +226,20 @@ export const useApplicationStore = create<ApplicationStore>((set, get) => ({
       set({ databaseError: errorMessage(error) });
     }
   },
-  setBatchZipName: (name) => set({ batchZipName: name }),
-  setBatchCsvName: (name) => set({ batchCsvName: name }),
+  setBatchZipFile: (file) => set({ batchZipFile: file }),
+  setBatchCsvFile: (file) => set({ batchCsvFile: file }),
   submitBatchUpload: async () => {
     const state = get();
-    const rows = state.batchRows;
 
-    if (rows.length === 0) {
+    if (!state.batchZipFile || !state.batchCsvFile) {
       return;
     }
 
-    const inputs: SubmitBatchApplicationInput[] = rows.map((row) => ({
-      submitted_data: sanitizeSubmittedData(row.submitted_data),
-      images: row.images
-    }));
-
     try {
-      await insertBatchApplications(inputs, state.database.applications.length);
+      await submitBatchApplication({ zipFile: state.batchZipFile, csvFile: state.batchCsvFile });
       set({
-        batchRows: [],
-        batchZipName: "",
-        batchCsvName: "",
+        batchZipFile: undefined,
+        batchCsvFile: undefined,
         queueFilter: "all",
         queueSort: "created_at",
         databaseError: null
@@ -305,7 +282,7 @@ export const useApplicationStore = create<ApplicationStore>((set, get) => ({
 
     const { applicationIds, decision } = state.decisionModal;
     try {
-      await updateApplicationsDecision(applicationIds, decision, state.decisionNotes);
+      await submitApplicationDecision(applicationIds, decision, state.decisionNotes);
       set({
         decisionModal: null,
         decisionNotes: "",
@@ -349,9 +326,9 @@ export const useApplicationStore = create<ApplicationStore>((set, get) => ({
   setHelpFieldKey: (fieldKey) => set({ helpFieldKey: fieldKey }),
   setZoomed: (zoomed) => set({ zoomed }),
   rotateViewer: () => set((state) => ({ rotation: (state.rotation + 90) % 360 })),
-  runProcessingCycle: async () => {
+  resetSeedData: async () => {
     try {
-      await processNextPendingApplication("client-demo-worker");
+      await resetApplicationSeedData();
       set({ databaseError: null });
       await get().initializeDatabase();
     } catch (error) {

@@ -1,28 +1,31 @@
 import { NextResponse } from "next/server";
 
-import { decideApplications, listQueueItems } from "@/features/applications/mock-repository";
-import { readServerDatabase, writeServerDatabase } from "@/features/applications/server-database";
+import { decideApplications } from "@/features/applications/server-repository";
 import type { Decision } from "@/features/applications/types";
 
 type BatchDecisionRequest = {
   applicationIds: string[];
   decision: Decision;
+  notes?: string;
   reviewerNotes?: string;
   reviewerId?: string;
 };
 
 export async function POST(request: Request) {
-  const body = (await request.json()) as BatchDecisionRequest;
-  const nextDatabase = decideApplications(
-    readServerDatabase(),
-    body.applicationIds,
-    body.decision,
-    body.reviewerNotes ?? "",
-    body.reviewerId
-  );
-  writeServerDatabase(nextDatabase);
+  try {
+    const body = (await request.json()) as BatchDecisionRequest;
+    const result = await decideApplications({
+      applicationIds: body.applicationIds ?? [],
+      decision: body.decision,
+      notes: body.notes ?? body.reviewerNotes ?? "",
+      reviewerId: body.reviewerId
+    });
 
-  return NextResponse.json({
-    applications: listQueueItems(nextDatabase, "created_at", "all")
-  });
+    return NextResponse.json({ ok: true, ...result });
+  } catch (error) {
+    return NextResponse.json(
+      { ok: false, error: error instanceof Error ? error.message : "Failed to save decision." },
+      { status: 500 }
+    );
+  }
 }

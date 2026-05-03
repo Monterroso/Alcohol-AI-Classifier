@@ -1,23 +1,38 @@
 import { NextResponse } from "next/server";
 
-import { listQueueItems, submitSingleApplication } from "@/features/applications/mock-repository";
-import { readServerDatabase, writeServerDatabase } from "@/features/applications/server-database";
-import type { SubmitSingleApplicationInput } from "@/features/applications/types";
+import { createSingleApplication, readApplicationDatabase } from "@/features/applications/server-repository";
+import type { LabelType, SubmittedApplicationData } from "@/features/applications/types";
 
 export async function GET() {
-  const database = readServerDatabase();
-
-  return NextResponse.json({
-    applications: listQueueItems(database, "created_at", "all")
-  });
+  try {
+    return NextResponse.json({ database: await readApplicationDatabase() });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Failed to load applications." },
+      { status: 500 }
+    );
+  }
 }
 
 export async function POST(request: Request) {
-  const input = (await request.json()) as SubmitSingleApplicationInput;
-  const nextDatabase = submitSingleApplication(readServerDatabase(), input);
-  writeServerDatabase(nextDatabase);
+  try {
+    const formData = await request.formData();
+    const submittedData = JSON.parse(String(formData.get("submitted_data") ?? "{}")) as SubmittedApplicationData;
+    const labels = JSON.parse(String(formData.get("image_labels") ?? "[]")) as Array<{ label_type: LabelType }>;
+    const files = formData.getAll("images").filter((file): file is File => file instanceof File);
+    const result = await createSingleApplication({
+      submittedData,
+      images: files.map((file, index) => ({
+        file,
+        labelType: labels[index]?.label_type ?? "other"
+      }))
+    });
 
-  return NextResponse.json({
-    applications: listQueueItems(nextDatabase, "created_at", "all")
-  });
+    return NextResponse.json({ ok: true, ...result });
+  } catch (error) {
+    return NextResponse.json(
+      { ok: false, error: error instanceof Error ? error.message : "Failed to submit application." },
+      { status: 500 }
+    );
+  }
 }

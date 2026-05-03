@@ -30,17 +30,16 @@ export function ApplicationUpload() {
   const uploadMode = useApplicationStore((state) => state.uploadMode);
   const singleForm = useApplicationStore((state) => state.singleForm);
   const singleImages = useApplicationStore((state) => state.singleImages);
-  const batchZipName = useApplicationStore((state) => state.batchZipName);
-  const batchCsvName = useApplicationStore((state) => state.batchCsvName);
-  const batchRows = useApplicationStore((state) => state.batchRows);
+  const batchZipFile = useApplicationStore((state) => state.batchZipFile);
+  const batchCsvFile = useApplicationStore((state) => state.batchCsvFile);
   const setUploadMode = useApplicationStore((state) => state.setUploadMode);
   const updateSingleField = useApplicationStore((state) => state.updateSingleField);
   const addSingleFiles = useApplicationStore((state) => state.addSingleFiles);
   const updateSingleImageLabel = useApplicationStore((state) => state.updateSingleImageLabel);
   const removeSingleImage = useApplicationStore((state) => state.removeSingleImage);
   const submitSingleUpload = useApplicationStore((state) => state.submitSingleUpload);
-  const setBatchZipName = useApplicationStore((state) => state.setBatchZipName);
-  const setBatchCsvName = useApplicationStore((state) => state.setBatchCsvName);
+  const setBatchZipFile = useApplicationStore((state) => state.setBatchZipFile);
+  const setBatchCsvFile = useApplicationStore((state) => state.setBatchCsvFile);
   const submitBatchUpload = useApplicationStore((state) => state.submitBatchUpload);
 
   const hasSingleData = Object.keys(emptySubmittedData).some(
@@ -51,7 +50,7 @@ export function ApplicationUpload() {
     singleForm.product_name.trim().length > 0 &&
     singleForm.brand_name.trim().length > 0 &&
     singleImages.length > 0;
-  const canSubmitBatch = batchRows.length > 0;
+  const canSubmitBatch = Boolean(batchZipFile && batchCsvFile);
 
   return (
     <main className="page-shell">
@@ -173,27 +172,27 @@ export function ApplicationUpload() {
           <section className="upload-panel">
             <div className="section-heading">
               <h2>Batch Files</h2>
-              <span>{batchRows.length ? `${batchRows.length} staged` : "Not staged"}</span>
+              <span>{canSubmitBatch ? "Ready" : "Waiting for files"}</span>
             </div>
             <div className="batch-file-grid">
               <label className="file-picker">
                 <FileArchive aria-hidden="true" size={24} />
                 <span>Images ZIP</span>
-                <strong>{batchZipName || "Choose ZIP file"}</strong>
+                <strong>{batchZipFile?.name || "Choose ZIP file"}</strong>
                 <input
                   type="file"
                   accept=".zip"
-                  onChange={(event) => setBatchZipName(event.currentTarget.files?.[0]?.name ?? "")}
+                  onChange={(event) => setBatchZipFile(event.currentTarget.files?.[0])}
                 />
               </label>
               <label className="file-picker">
                 <FileSpreadsheet aria-hidden="true" size={24} />
                 <span>Application CSV</span>
-                <strong>{batchCsvName || "Choose CSV file"}</strong>
+                <strong>{batchCsvFile?.name || "Choose CSV file"}</strong>
                 <input
                   type="file"
                   accept=".csv,text/csv"
-                  onChange={(event) => setBatchCsvName(event.currentTarget.files?.[0]?.name ?? "")}
+                  onChange={(event) => setBatchCsvFile(event.currentTarget.files?.[0])}
                 />
               </label>
             </div>
@@ -214,29 +213,20 @@ export function ApplicationUpload() {
 
           <section className="upload-panel">
             <div className="section-heading">
-              <h2>Staged Applications</h2>
-              <span>{batchRows.length || "No"} rows</span>
+              <h2>Batch Mapping</h2>
+              <span>Parsed on submit</span>
             </div>
             <div className="batch-preview-list">
-              {batchRows.length === 0 ? (
-                <div className="empty-panel">Stage the CSV to preview how applications and labels will map.</div>
+              <div className="empty-panel">
+                The backend parses the CSV, matches listed image filenames inside the ZIP, uploads those images to
+                storage, and creates pending applications in Supabase.
+              </div>
+              {batchZipFile ? (
+                <span className="label-chip">ZIP: {batchZipFile.name}</span>
               ) : null}
-              {batchRows.map((row) => (
-                <article className="batch-preview-row" key={row.id}>
-                  <div>
-                    <strong>{row.submitted_data.product_name}</strong>
-                    <span>{row.submitted_data.applicant_name}</span>
-                    <span>{row.submitted_data.application_type}</span>
-                  </div>
-                  <div className="label-chip-list">
-                    {row.images.map((image) => (
-                      <span className="label-chip" key={`${row.id}-${image.original_filename}`}>
-                        {image.label_type}: {image.original_filename?.split("/").pop()}
-                      </span>
-                    ))}
-                  </div>
-                </article>
-              ))}
+              {batchCsvFile ? (
+                <span className="label-chip">CSV: {batchCsvFile.name}</span>
+              ) : null}
             </div>
           </section>
         </section>

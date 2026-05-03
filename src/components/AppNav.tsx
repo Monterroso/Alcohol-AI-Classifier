@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { Database, FileUp, ListChecks, ScanLine } from "lucide-react";
+import { Database, FileUp, ListChecks, RotateCcw } from "lucide-react";
 
 import { useApplicationStore } from "@/features/applications/store";
 
 export function AppNav() {
-  const runProcessingCycle = useApplicationStore((state) => state.runProcessingCycle);
+  const resetSeedData = useApplicationStore((state) => state.resetSeedData);
 
   return (
     <nav className="app-nav" aria-label="Primary navigation">
@@ -23,9 +23,9 @@ export function AppNav() {
           <ListChecks aria-hidden="true" size={17} />
           Queue
         </Link>
-        <button className="nav-button" onClick={runProcessingCycle}>
-          <ScanLine aria-hidden="true" size={17} />
-          Process next
+        <button className="nav-button" onClick={resetSeedData}>
+          <RotateCcw aria-hidden="true" size={17} />
+          Reset seed
         </button>
       </div>
     </nav>
