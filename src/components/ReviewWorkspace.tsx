@@ -62,6 +62,8 @@ function formatOcrConfidence(confidence?: number) {
 
 export function ReviewWorkspace({ applicationId }: { applicationId: string }) {
   const database = useApplicationStore((state) => state.database);
+  const isDatabaseLoading = useApplicationStore((state) => state.isDatabaseLoading);
+  const databaseError = useApplicationStore((state) => state.databaseError);
   const activeFieldByApplicationId = useApplicationStore((state) => state.activeFieldByApplicationId);
   const evidenceIndexByApplicationId = useApplicationStore((state) => state.evidenceIndexByApplicationId);
   const helpFieldKey = useApplicationStore((state) => state.helpFieldKey);
@@ -84,7 +86,13 @@ export function ReviewWorkspace({ applicationId }: { applicationId: string }) {
   if (!analysis) {
     return (
       <main className="page-shell">
-        <div className="inline-error">Review unavailable.</div>
+        {databaseError ? (
+          <div className="inline-error">{databaseError}</div>
+        ) : (
+          <div className="loading-panel">
+            {isDatabaseLoading ? "Loading application from Supabase." : "Review unavailable."}
+          </div>
+        )}
         <Link className="secondary-link" href="/applications">
           Back to queue
         </Link>

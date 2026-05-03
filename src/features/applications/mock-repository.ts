@@ -1,4 +1,3 @@
-import { createPlaceholderLabel } from "./mock-data";
 import {
   emptySubmittedData,
   fieldDefinitions,
@@ -25,7 +24,7 @@ import {
   type ValidationResultRecord
 } from "./types";
 
-const idPrefix = "mock";
+const idPrefix = "app";
 
 function createId(name: string) {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -324,9 +323,7 @@ function appendSubmittedApplication(
   const applicationImages = images.map((image, index): ApplicationImageRecord => ({
     id: createId(`${idPrefix}-img`),
     application_id: application.id,
-    image_url:
-      image.image_url ||
-      createPlaceholderLabel(application.submitted_data.brand_name, image.label_type || `Image ${index + 1}`),
+    image_url: image.image_url,
     label_type: image.label_type,
     original_filename: image.original_filename || `label-${index + 1}.png`,
     mime_type: image.mime_type || "image/png",
@@ -460,8 +457,8 @@ export function processClaimedApplication(
       extraction_status: status,
       explanation:
         status === "found"
-          ? "Mock OCR and rules engine found a matching value in the uploaded label set."
-          : "Mock OCR did not find a value for this field.",
+          ? "OCR and rules analysis found a matching value in the uploaded label set."
+          : "OCR did not find a value for this field.",
       created_at: timestamp
     });
 

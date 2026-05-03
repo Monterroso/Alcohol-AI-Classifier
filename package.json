@@ -7,13 +7,17 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
+    "db:setup": "tsx scripts/setup-supabase-db.ts",
+    "db:setup:seed": "tsx scripts/setup-supabase-db.ts --seed",
     "worker": "tsx worker/processor.ts",
     "worker:once": "tsx worker/processor.ts --once"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.105.1",
     "clsx": "latest",
     "lucide-react": "latest",
     "next": "latest",
+    "pg": "^8.20.0",
     "react": "latest",
     "react-dom": "latest",
     "zustand": "latest"
@@ -21,6 +25,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "latest",
     "@types/node": "latest",
+    "@types/pg": "^8.20.0",
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "postcss": "latest",

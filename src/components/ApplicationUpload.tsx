@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FileArchive, FileSpreadsheet, FileUp, Images, Plus, Send, Trash2 } from "lucide-react";
+import { FileArchive, FileSpreadsheet, FileUp, Images, Send, Trash2 } from "lucide-react";
 
 import { useApplicationStore } from "@/features/applications/store";
 import {
@@ -16,14 +16,14 @@ const uploadFields: Array<{
   label: string;
   placeholder: string;
 }> = [
-  { key: "applicant_name", label: "Applicant", placeholder: "Northline Spirits LLC" },
-  { key: "application_type", label: "Application type", placeholder: "Distilled spirits label" },
-  { key: "brand_name", label: "Brand name", placeholder: "Northline" },
-  { key: "product_name", label: "Product name", placeholder: "Northline Reserve Bourbon" },
-  { key: "alcohol_content", label: "Alcohol content", placeholder: "40% ALC/VOL" },
-  { key: "net_contents", label: "Net contents", placeholder: "750 ML" },
-  { key: "origin", label: "Origin", placeholder: "Louisville, Kentucky" },
-  { key: "government_warning", label: "Government warning", placeholder: "Government warning present" }
+  { key: "applicant_name", label: "Applicant", placeholder: "Applicant legal name" },
+  { key: "application_type", label: "Application type", placeholder: "Label application type" },
+  { key: "brand_name", label: "Brand name", placeholder: "Brand shown on label" },
+  { key: "product_name", label: "Product name", placeholder: "Product identity" },
+  { key: "alcohol_content", label: "Alcohol content", placeholder: "ABV or proof statement" },
+  { key: "net_contents", label: "Net contents", placeholder: "Container volume" },
+  { key: "origin", label: "Origin", placeholder: "Producer or origin location" },
+  { key: "government_warning", label: "Government warning", placeholder: "Warning statement status" }
 ];
 
 export function ApplicationUpload() {
@@ -36,13 +36,11 @@ export function ApplicationUpload() {
   const setUploadMode = useApplicationStore((state) => state.setUploadMode);
   const updateSingleField = useApplicationStore((state) => state.updateSingleField);
   const addSingleFiles = useApplicationStore((state) => state.addSingleFiles);
-  const addPlaceholderImage = useApplicationStore((state) => state.addPlaceholderImage);
   const updateSingleImageLabel = useApplicationStore((state) => state.updateSingleImageLabel);
   const removeSingleImage = useApplicationStore((state) => state.removeSingleImage);
   const submitSingleUpload = useApplicationStore((state) => state.submitSingleUpload);
   const setBatchZipName = useApplicationStore((state) => state.setBatchZipName);
   const setBatchCsvName = useApplicationStore((state) => state.setBatchCsvName);
-  const stageBatchPreview = useApplicationStore((state) => state.stageBatchPreview);
   const submitBatchUpload = useApplicationStore((state) => state.submitBatchUpload);
 
   const hasSingleData = Object.keys(emptySubmittedData).some(
@@ -51,8 +49,9 @@ export function ApplicationUpload() {
   const canSubmitSingle =
     singleForm.applicant_name.trim().length > 0 &&
     singleForm.product_name.trim().length > 0 &&
-    singleForm.brand_name.trim().length > 0;
-  const canSubmitBatch = batchRows.length > 0 || (batchZipName.length > 0 && batchCsvName.length > 0);
+    singleForm.brand_name.trim().length > 0 &&
+    singleImages.length > 0;
+  const canSubmitBatch = batchRows.length > 0;
 
   return (
     <main className="page-shell">
@@ -125,10 +124,6 @@ export function ApplicationUpload() {
                   }}
                 />
               </label>
-              <button className="secondary-button compact" onClick={addPlaceholderImage}>
-                <Plus aria-hidden="true" size={17} />
-                Add mock image
-              </button>
             </div>
 
             <div className="image-draft-list">
@@ -210,9 +205,6 @@ export function ApplicationUpload() {
               </p>
             </div>
             <div className="upload-actions">
-              <button className="secondary-button" onClick={stageBatchPreview}>
-                Stage Preview
-              </button>
               <button className="primary-button" disabled={!canSubmitBatch} onClick={submitBatchUpload}>
                 <Send aria-hidden="true" size={18} />
                 Submit Batch

@@ -1,7 +1,7 @@
-import { createMockDatabase } from "./mock-data";
+import { createEmptyDatabase } from "./empty-database";
 import type { ApplicationDatabase } from "./types";
 
-let database = createMockDatabase();
+let database = createEmptyDatabase();
 
 export function readServerDatabase() {
   return database;
@@ -12,6 +12,6 @@ export function writeServerDatabase(nextDatabase: ApplicationDatabase) {
 }
 
 export function resetServerDatabase() {
-  database = createMockDatabase();
+  database = createEmptyDatabase();
   return database;
 }

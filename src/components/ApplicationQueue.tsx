@@ -94,6 +94,8 @@ function statusIcon(application: QueueItem) {
 
 export function ApplicationQueue() {
   const database = useApplicationStore((state) => state.database);
+  const isDatabaseLoading = useApplicationStore((state) => state.isDatabaseLoading);
+  const databaseError = useApplicationStore((state) => state.databaseError);
   const queueSort = useApplicationStore((state) => state.queueSort);
   const queueFilter = useApplicationStore((state) => state.queueFilter);
   const selectedApplicationIds = useApplicationStore((state) => state.selectedApplicationIds);
@@ -209,7 +211,13 @@ export function ApplicationQueue() {
           <span>Action</span>
         </div>
 
-        {applications.length === 0 ? (
+        {databaseError ? <div className="inline-error">{databaseError}</div> : null}
+
+        {isDatabaseLoading && applications.length === 0 ? (
+          <div className="loading-panel">Loading applications from Supabase.</div>
+        ) : null}
+
+        {!isDatabaseLoading && !databaseError && applications.length === 0 ? (
           <div className="loading-panel">No applications match this filter.</div>
         ) : null}
 

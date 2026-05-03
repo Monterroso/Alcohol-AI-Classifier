@@ -1,13 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { Database, FileUp, ListChecks, RotateCcw, ScanLine } from "lucide-react";
+import { Database, FileUp, ListChecks, ScanLine } from "lucide-react";
 
 import { useApplicationStore } from "@/features/applications/store";
 
 export function AppNav() {
   const runProcessingCycle = useApplicationStore((state) => state.runProcessingCycle);
-  const resetMockData = useApplicationStore((state) => state.resetMockData);
 
   return (
     <nav className="app-nav" aria-label="Primary navigation">
@@ -27,10 +26,6 @@ export function AppNav() {
         <button className="nav-button" onClick={runProcessingCycle}>
           <ScanLine aria-hidden="true" size={17} />
           Process next
-        </button>
-        <button className="nav-button" onClick={resetMockData}>
-          <RotateCcw aria-hidden="true" size={17} />
-          Reset mock
         </button>
       </div>
     </nav>
