@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -87,6 +88,64 @@ export function ReviewWorkspace({ applicationId }: { applicationId: string }) {
   const openDecisionModal = useApplicationStore((state) => state.openDecisionModal);
 
   const analysis = getReviewAnalysis(database, applicationId);
+  const [requestedImageIndex, setRequestedImageIndex] = useState(0);
+
+  const selectedFieldKey = activeFieldByApplicationId[applicationId];
+  const selectedRow =
+    analysis?.review_rows.find((row) => row.field_key === selectedFieldKey) ??
+    analysis?.review_rows.find((row) => row.evidence.length > 0) ??
+    analysis?.review_rows[0] ??
+    null;
+  const evidenceCount = selectedRow?.evidence.length ?? 0;
+  const requestedEvidenceIndex = evidenceIndexByApplicationId[applicationId] ?? 0;
+  const activeEvidenceIndex = evidenceCount > 0 ? Math.min(requestedEvidenceIndex, evidenceCount - 1) : 0;
+  const activeEvidence = selectedRow?.evidence[activeEvidenceIndex] ?? null;
+  const activeEvidenceImageIndex = activeEvidence
+    ? analysis?.images.findIndex((image) => image.id === activeEvidence.image_id) ?? -1
+    : -1;
+  const imageCount = analysis?.images.length ?? 0;
+  const activeImageIndex = imageCount > 0 ? Math.min(requestedImageIndex, imageCount - 1) : 0;
+  const activeImage = analysis?.images[activeImageIndex] ?? null;
+  const activeEvidenceForImage = activeEvidence?.image_id === activeImage?.id ? activeEvidence : null;
+  const helpDefinition = helpFieldKey
+    ? fieldDefinitions.find((definition) => definition.key === helpFieldKey)
+    : null;
+  const hasDocumentIntelligence = analysis?.application.processing_status === "processed";
+  const finalDecision = analysis && isFinalReviewStatus(analysis.application.review_status)
+    ? analysis.application.review_status
+    : null;
+  const isFinalized = Boolean(finalDecision);
+
+  useEffect(() => {
+    if (activeEvidenceImageIndex >= 0) {
+      setRequestedImageIndex(activeEvidenceImageIndex);
+    }
+  }, [activeEvidenceImageIndex]);
+
+  useEffect(() => {
+    if (requestedImageIndex >= imageCount) {
+      setRequestedImageIndex(Math.max(imageCount - 1, 0));
+    }
+  }, [imageCount, requestedImageIndex]);
+
+  function selectImage(index: number) {
+    if (!analysis) {
+      return;
+    }
+
+    const targetImage = analysis.images[index];
+    if (!targetImage) {
+      return;
+    }
+
+    setRequestedImageIndex(index);
+
+    const matchingEvidenceIndex =
+      selectedRow?.evidence.findIndex((evidence) => evidence.image_id === targetImage.id) ?? -1;
+    if (matchingEvidenceIndex >= 0) {
+      setEvidenceIndex(applicationId, matchingEvidenceIndex);
+    }
+  }
 
   if (!analysis) {
     return (
@@ -104,29 +163,6 @@ export function ReviewWorkspace({ applicationId }: { applicationId: string }) {
       </main>
     );
   }
-
-  const selectedFieldKey = activeFieldByApplicationId[applicationId];
-  const selectedRow =
-    analysis.review_rows.find((row) => row.field_key === selectedFieldKey) ??
-    analysis.review_rows.find((row) => row.evidence.length > 0) ??
-    analysis.review_rows[0] ??
-    null;
-  const evidenceCount = selectedRow?.evidence.length ?? 0;
-  const requestedEvidenceIndex = evidenceIndexByApplicationId[applicationId] ?? 0;
-  const activeEvidenceIndex = evidenceCount > 0 ? Math.min(requestedEvidenceIndex, evidenceCount - 1) : 0;
-  const activeEvidence = selectedRow?.evidence[activeEvidenceIndex] ?? null;
-  const activeImage =
-    (activeEvidence
-      ? analysis.images.find((image) => image.id === activeEvidence.image_id)
-      : analysis.images[0]) ?? null;
-  const helpDefinition = helpFieldKey
-    ? fieldDefinitions.find((definition) => definition.key === helpFieldKey)
-    : null;
-  const hasDocumentIntelligence = analysis.application.processing_status === "processed";
-  const finalDecision = isFinalReviewStatus(analysis.application.review_status)
-    ? analysis.application.review_status
-    : null;
-  const isFinalized = Boolean(finalDecision);
 
   return (
     <main className="page-shell">
@@ -174,7 +210,10 @@ export function ReviewWorkspace({ applicationId }: { applicationId: string }) {
       <section className="review-grid">
         <LabelViewer
           activeImage={activeImage}
-          activeEvidence={hasDocumentIntelligence ? activeEvidence : null}
+          activeEvidence={hasDocumentIntelligence ? activeEvidenceForImage : null}
+          imageCount={analysis.images.length}
+          imageIndex={activeImageIndex}
+          setImageIndex={selectImage}
           selectedRow={selectedRow}
           evidenceIndex={activeEvidenceIndex}
           setEvidenceIndex={(index) => setEvidenceIndex(applicationId, index)}
@@ -389,6 +428,9 @@ function OcrSummaryPanel({ summaries }: { summaries: OcrImageSummary[] }) {
 function LabelViewer({
   activeImage,
   activeEvidence,
+  imageCount,
+  imageIndex,
+  setImageIndex,
   selectedRow,
   evidenceIndex,
   setEvidenceIndex,
@@ -400,6 +442,9 @@ function LabelViewer({
 }: {
   activeImage: ApplicationImageRecord | null;
   activeEvidence: EvidenceView | null;
+  imageCount: number;
+  imageIndex: number;
+  setImageIndex: (index: number) => void;
   selectedRow: ReviewFieldRow | null;
   evidenceIndex: number;
   setEvidenceIndex: (index: number) => void;
@@ -410,6 +455,8 @@ function LabelViewer({
   showEvidence: boolean;
 }) {
   const evidenceCount = selectedRow?.evidence.length ?? 0;
+  const canGoToPreviousImage = imageIndex > 0;
+  const canGoToNextImage = imageIndex < imageCount - 1;
   const canGoBack = showEvidence && evidenceIndex > 0;
   const canGoNext = showEvidence && evidenceIndex < evidenceCount - 1;
 
@@ -418,15 +465,31 @@ function LabelViewer({
       <div className="section-heading">
         <div>
           <h2>{activeImage?.original_filename ?? "Label unavailable"}</h2>
-          {showEvidence ? (
-            <span>
-              {evidenceCount > 0 ? `Image ${evidenceIndex + 1} of ${evidenceCount}` : "No evidence"}
-            </span>
-          ) : (
-            <span>{activeImage?.label_type ?? "Uploaded label"}</span>
-          )}
+          <span>
+            {imageCount > 0
+              ? `Image ${imageIndex + 1} of ${imageCount}${activeImage?.label_type ? ` - ${activeImage.label_type}` : ""}`
+              : "No images"}
+          </span>
         </div>
         <div className="viewer-tools">
+          <button
+            className="icon-button"
+            disabled={!canGoToPreviousImage}
+            onClick={() => setImageIndex(imageIndex - 1)}
+            aria-label="Previous image"
+            title="Previous image"
+          >
+            <ChevronLeft aria-hidden="true" size={18} />
+          </button>
+          <button
+            className="icon-button"
+            disabled={!canGoToNextImage}
+            onClick={() => setImageIndex(imageIndex + 1)}
+            aria-label="Next image"
+            title="Next image"
+          >
+            <ChevronRight aria-hidden="true" size={18} />
+          </button>
           <button
             className="icon-button"
             onClick={() => setZoomed(!zoomed)}
@@ -467,17 +530,20 @@ function LabelViewer({
           <div className="evidence-controls">
             <button className="secondary-button compact" disabled={!canGoBack} onClick={() => setEvidenceIndex(evidenceIndex - 1)}>
               <ChevronLeft aria-hidden="true" size={18} />
-              Back
+              Previous evidence
             </button>
             <button className="secondary-button compact" disabled={!canGoNext} onClick={() => setEvidenceIndex(evidenceIndex + 1)}>
-              Next
+              Next evidence
               <ChevronRight aria-hidden="true" size={18} />
             </button>
           </div>
 
           <div className="highlighted-text">
             <strong>Highlighted text</strong>
-            <p>{activeEvidence?.text ?? "No OCR evidence selected."}</p>
+            <p>
+              {activeEvidence?.text ??
+                (evidenceCount > 0 ? "No highlighted evidence on this image." : "No OCR evidence selected.")}
+            </p>
           </div>
         </>
       ) : null}
