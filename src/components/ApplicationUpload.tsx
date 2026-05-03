@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRef } from "react";
 import { FileArchive, FileSpreadsheet, FileUp, Images, Send, Trash2 } from "lucide-react";
 
 import { useApplicationStore } from "@/features/applications/store";
@@ -27,6 +28,7 @@ const uploadFields: Array<{
 ];
 
 export function ApplicationUpload() {
+  const singleImageInputRef = useRef<HTMLInputElement>(null);
   const uploadMode = useApplicationStore((state) => state.uploadMode);
   const singleForm = useApplicationStore((state) => state.singleForm);
   const singleImages = useApplicationStore((state) => state.singleImages);
@@ -110,19 +112,25 @@ export function ApplicationUpload() {
             </div>
             <div className="drop-panel">
               <FileUp aria-hidden="true" size={26} />
-              <label>
-                Upload label images
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={(event) => {
-                    if (event.currentTarget.files) {
-                      addSingleFiles(event.currentTarget.files);
-                    }
-                  }}
-                />
-              </label>
+              <span>Upload label images</span>
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => singleImageInputRef.current?.click()}
+              >
+                Choose images
+              </button>
+              <input
+                ref={singleImageInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={(event) => {
+                  if (event.currentTarget.files) {
+                    addSingleFiles(event.currentTarget.files);
+                  }
+                }}
+              />
             </div>
 
             <div className="image-draft-list">
