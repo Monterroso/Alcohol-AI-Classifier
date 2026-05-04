@@ -8,7 +8,7 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "db:setup": "tsx scripts/setup-supabase-db.ts",
-    "db:setup:seed": "tsx scripts/setup-supabase-db.ts --seed",
+    "db:setup:reset": "tsx scripts/setup-supabase-db.ts --reset-data",
     "storage:cleanup-orphaned-images": "tsx scripts/cleanup-orphaned-application-images.ts",
     "worker": "tsx worker/processor.ts",
     "worker:once": "tsx worker/processor.ts --once",

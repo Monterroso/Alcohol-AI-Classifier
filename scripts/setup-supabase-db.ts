@@ -5,7 +5,7 @@ import { Client } from "pg";
 import { resetSeedData } from "../src/features/applications/server-seed";
 
 const rootDir = process.cwd();
-const shouldSeed = process.argv.includes("--seed");
+const shouldResetData = process.argv.includes("--reset-data") || process.argv.includes("--seed");
 
 function readSql(relativePath: string) {
   return readFileSync(path.join(rootDir, relativePath), "utf8");
@@ -36,10 +36,10 @@ async function main() {
     await client.query(readSql("supabase/schema.sql"));
     console.log("Created or verified Supabase tables.");
 
-    if (shouldSeed) {
+    if (shouldResetData) {
       const result = await resetSeedData();
       console.log(
-        `Seeded submitted applications (${result.applicationCount} applications, ${result.imageCount} images).`
+        `Reset application data (${result.applicationCount} applications, ${result.imageCount} images).`
       );
     }
   } finally {

@@ -25,7 +25,7 @@ export function AppNav() {
         </Link>
         <button className="nav-button" onClick={resetSeedData}>
           <RotateCcw aria-hidden="true" size={17} />
-          Reset seed
+          Reset data
         </button>
       </div>
     </nav>

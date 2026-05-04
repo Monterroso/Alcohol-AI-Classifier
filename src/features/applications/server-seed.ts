@@ -18,8 +18,7 @@ const imageBucketName = "application-images";
 export async function resetSeedData() {
   const supabase = createServerSupabaseClient();
   await ensureImageBucket(supabase);
-  await deleteAllApplications(supabase);
-  const seed = await createSeedDatabase(supabase);
+  const deleteResult = await deleteAllApplications(supabase);
 
   for (const table of [
     "validation_results",
@@ -33,29 +32,12 @@ export async function resetSeedData() {
     }
   }
 
-  await insertRows("applications", seed.applications);
-  await insertRows("application_images", seed.application_images);
-  await insertRows("ocr_text_blocks", seed.ocr_text_blocks);
-  await insertRows("extracted_fields", seed.extracted_fields);
-  await insertRows("extracted_field_evidence", seed.extracted_field_evidence);
-  await insertRows("validation_results", seed.validation_results);
-
   return {
-    applicationCount: seed.applications.length,
-    imageCount: seed.application_images.length,
-    fieldCount: seed.extracted_fields.length
+    applicationCount: 0,
+    imageCount: 0,
+    fieldCount: 0,
+    removedImageCount: deleteResult.removedImageCount
   };
-
-  async function insertRows(table: string, rows: unknown[]) {
-    if (rows.length === 0) {
-      return;
-    }
-
-    const { error } = await supabase.from(table).insert(rows);
-    if (error) {
-      throw new Error(`Failed to seed ${table}: ${error.message}`);
-    }
-  }
 }
 
 async function ensureImageBucket(supabase: ReturnType<typeof createServerSupabaseClient>) {
