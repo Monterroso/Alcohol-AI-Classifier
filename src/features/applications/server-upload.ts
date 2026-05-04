@@ -3,6 +3,7 @@ import JSZip from "jszip";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 import { emptySubmittedData } from "./types";
+import { normalizeApplicationImage } from "./image-normalization";
 import type { ApplicationImageRecord, LabelType, SubmittedApplicationData } from "./types";
 
 const imageBucketName = "application-images";
@@ -102,9 +103,15 @@ async function insertApplicationWithImages(input: {
   const imageRows: Omit<ApplicationImageRecord, "id">[] = [];
 
   for (const [index, image] of input.images.entries()) {
-    const storagePath = `${applicationId}/${crypto.randomUUID()}-${sanitizeFileName(image.fileName || `label-${index + 1}`)}`;
-    const { error: uploadError } = await supabase.storage.from(imageBucketName).upload(storagePath, image.bytes, {
-      contentType: image.mimeType,
+    const normalizedImage = await normalizeApplicationImage({
+      bytes: image.bytes,
+      fileName: image.fileName || `label-${index + 1}.jpg`,
+      declaredMimeType: image.mimeType,
+      outputFormat: "jpeg"
+    });
+    const storagePath = `${applicationId}/${crypto.randomUUID()}-${sanitizeFileName(normalizedImage.fileName)}`;
+    const { error: uploadError } = await supabase.storage.from(imageBucketName).upload(storagePath, normalizedImage.bytes, {
+      contentType: normalizedImage.mimeType,
       upsert: false
     });
 
@@ -118,8 +125,10 @@ async function insertApplicationWithImages(input: {
       image_url: imageUrl,
       storage_path: storagePath,
       label_type: image.labelType,
-      original_filename: image.fileName,
-      mime_type: image.mimeType,
+      original_filename: normalizedImage.fileName,
+      mime_type: normalizedImage.mimeType,
+      width_px: normalizedImage.widthPx,
+      height_px: normalizedImage.heightPx,
       created_at: timestamp
     });
   }
@@ -142,7 +151,7 @@ async function ensureImageBucket(supabase: ReturnType<typeof createServerSupabas
   const { error } = await supabase.storage.createBucket(imageBucketName, {
     public: true,
     fileSizeLimit: 20 * 1024 * 1024,
-    allowedMimeTypes: ["image/png", "image/jpeg", "image/webp", "image/gif"]
+    allowedMimeTypes: ["image/png", "image/jpeg"]
   });
 
   if (error && !error.message.toLowerCase().includes("already exists")) {

@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { loadEnvConfig } from "@next/env";
 import { Client } from "pg";
+import { resetSeedData } from "../src/features/applications/server-seed";
 
 const rootDir = process.cwd();
 const shouldSeed = process.argv.includes("--seed");
@@ -36,8 +37,10 @@ async function main() {
     console.log("Created or verified Supabase tables.");
 
     if (shouldSeed) {
-      await client.query(readSql("supabase/seed-submitted-applications.sql"));
-      console.log("Seeded submitted applications.");
+      const result = await resetSeedData();
+      console.log(
+        `Seeded submitted applications (${result.applicationCount} applications, ${result.imageCount} images).`
+      );
     }
   } finally {
     await client.end();

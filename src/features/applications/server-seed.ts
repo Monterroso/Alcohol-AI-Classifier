@@ -1,5 +1,6 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
+import { normalizeApplicationImage } from "./image-normalization";
 import type {
   ApplicationDatabase,
   ApplicationImageRecord,
@@ -11,9 +12,12 @@ import type {
   ValidationResultRecord
 } from "./types";
 
+const imageBucketName = "application-images";
+
 export async function resetSeedData() {
   const supabase = createServerSupabaseClient();
-  const seed = createSeedDatabase();
+  await ensureImageBucket(supabase);
+  const seed = await createSeedDatabase(supabase);
 
   for (const table of [
     "validation_results",
@@ -54,17 +58,32 @@ export async function resetSeedData() {
   }
 }
 
-function seedImage(title: string, subtitle: string) {
-  return `data:image/svg+xml;utf8,${encodeURIComponent(
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 600"><rect width="900" height="600" fill="white"/><text x="450" y="240" text-anchor="middle" font-family="Arial" font-size="64">${title}</text><text x="450" y="330" text-anchor="middle" font-family="Arial" font-size="44">${subtitle}</text></svg>`
-  )}`;
+async function ensureImageBucket(supabase: ReturnType<typeof createServerSupabaseClient>) {
+  const { data } = await supabase.storage.getBucket(imageBucketName);
+  if (data) {
+    return;
+  }
+
+  const { error } = await supabase.storage.createBucket(imageBucketName, {
+    public: true,
+    fileSizeLimit: 20 * 1024 * 1024,
+    allowedMimeTypes: ["image/png", "image/jpeg"]
+  });
+
+  if (error && !error.message.toLowerCase().includes("already exists")) {
+    throw new Error(error.message);
+  }
+}
+
+function seedImageSvg(title: string, subtitle: string) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1200" viewBox="0 0 1800 1200"><rect width="1800" height="1200" fill="white"/><text x="900" y="480" text-anchor="middle" font-family="Arial" font-size="128">${escapeXml(title)}</text><text x="900" y="660" text-anchor="middle" font-family="Arial" font-size="88">${escapeXml(subtitle)}</text></svg>`;
 }
 
 function bbox(x: number, y: number, width: number, height: number) {
   return { x, y, width, height };
 }
 
-function createSeedDatabase(): ApplicationDatabase {
+async function createSeedDatabase(supabase: ReturnType<typeof createServerSupabaseClient>): Promise<ApplicationDatabase> {
   const applications: ApplicationRecord[] = [
     {
       id: "app-1001",
@@ -130,13 +149,21 @@ function createSeedDatabase(): ApplicationDatabase {
     }
   ];
 
-  const application_images: ApplicationImageRecord[] = [
-    image("img-1001-front", "app-1001", seedImage("NORTHLINE", "Reserve Bourbon"), "front", "northline-front.png"),
-    image("img-1001-back", "app-1001", seedImage("NORTHLINE", "Back Label"), "government_warning", "northline-back.png"),
-    image("img-1002-front", "app-1002", seedImage("CASCADIA", "Pinot Gris"), "front", "cascadia-front.png"),
-    image("img-1002-back", "app-1002", seedImage("CASCADIA", "Imported Wine"), "back", "cascadia-back.png"),
-    image("img-1003-front", "app-1003", seedImage("HARBOR LIGHT", "Lager"), "front", "harbor-light-front.png")
-  ];
+  const application_images: ApplicationImageRecord[] = await Promise.all([
+    seedImage(supabase, "img-1001-front", "app-1001", "NORTHLINE", "Reserve Bourbon", "front", "northline-front.png"),
+    seedImage(
+      supabase,
+      "img-1001-back",
+      "app-1001",
+      "NORTHLINE",
+      "Back Label",
+      "government_warning",
+      "northline-back.png"
+    ),
+    seedImage(supabase, "img-1002-front", "app-1002", "CASCADIA", "Pinot Gris", "front", "cascadia-front.png"),
+    seedImage(supabase, "img-1002-back", "app-1002", "CASCADIA", "Imported Wine", "back", "cascadia-back.png"),
+    seedImage(supabase, "img-1003-front", "app-1003", "HARBOR LIGHT", "Lager", "front", "harbor-light-front.png")
+  ]);
 
   const ocr_text_blocks: OcrTextBlockRecord[] = [
     block("ocr-1001-brand", "app-1001", "img-1001-front", "NORTHLINE", 0.98, bbox(10.5, 16, 79, 18), 1),
@@ -204,18 +231,76 @@ function createSeedDatabase(): ApplicationDatabase {
   };
 }
 
-function image(id: string, applicationId: string, imageUrl: string, labelType: LabelType, filename: string): ApplicationImageRecord {
+async function seedImage(
+  supabase: ReturnType<typeof createServerSupabaseClient>,
+  id: string,
+  applicationId: string,
+  title: string,
+  subtitle: string,
+  labelType: LabelType,
+  filename: string
+) {
+  const normalizedImage = await normalizeApplicationImage({
+    bytes: seedImageSvg(title, subtitle),
+    fileName: filename,
+    declaredMimeType: "image/svg+xml",
+    outputFormat: "png"
+  });
+  const storagePath = `seed/${applicationId}/${normalizedImage.fileName}`;
+  const { error } = await supabase.storage.from(imageBucketName).upload(storagePath, normalizedImage.bytes, {
+    contentType: normalizedImage.mimeType,
+    upsert: true
+  });
+
+  if (error) {
+    throw new Error(`Failed to upload seed image ${filename}: ${error.message}`);
+  }
+
+  const imageUrl = supabase.storage.from(imageBucketName).getPublicUrl(storagePath).data.publicUrl;
+  return image(
+    id,
+    applicationId,
+    imageUrl,
+    storagePath,
+    labelType,
+    normalizedImage.fileName,
+    normalizedImage.mimeType,
+    normalizedImage.widthPx,
+    normalizedImage.heightPx
+  );
+}
+
+function image(
+  id: string,
+  applicationId: string,
+  imageUrl: string,
+  storagePath: string,
+  labelType: LabelType,
+  filename: string,
+  mimeType: string,
+  widthPx: number,
+  heightPx: number
+): ApplicationImageRecord {
   return {
     id,
     application_id: applicationId,
     image_url: imageUrl,
+    storage_path: storagePath,
     label_type: labelType,
     original_filename: filename,
-    mime_type: "image/png",
-    width_px: 1800,
-    height_px: 1200,
+    mime_type: mimeType,
+    width_px: widthPx,
+    height_px: heightPx,
     created_at: "2026-05-02T14:08:00.000Z"
   };
+}
+
+function escapeXml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 function block(
