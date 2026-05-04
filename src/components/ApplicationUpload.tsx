@@ -12,8 +12,10 @@ import {
 } from "@/features/applications/demo-data";
 import { useApplicationStore } from "@/features/applications/store";
 import {
+  alcoholTypeOptions,
   emptySubmittedData,
   labelTypeOptions,
+  type AlcoholType,
   type LabelType,
   type SubmittedApplicationData
 } from "@/features/applications/types";
@@ -24,14 +26,24 @@ const uploadFields: Array<{
   placeholder: string;
 }> = [
   { key: "applicant_name", label: "Applicant", placeholder: "Applicant legal name" },
-  { key: "application_type", label: "Application type", placeholder: "Label application type" },
   { key: "brand_name", label: "Brand name", placeholder: "Brand shown on label" },
-  { key: "product_name", label: "Product name", placeholder: "Product identity" },
+  { key: "class_type", label: "Class/Type", placeholder: "Kentucky Straight Bourbon Whiskey" },
+  { key: "product_name", label: "Product/fanciful name", placeholder: "Optional product identity" },
   { key: "alcohol_content", label: "Alcohol content", placeholder: "ABV or proof statement" },
   { key: "net_contents", label: "Net contents", placeholder: "Container volume" },
-  { key: "origin", label: "Origin", placeholder: "Producer or origin location" },
+  {
+    key: "origin",
+    label: "Production/Appellation",
+    placeholder: "Producer, bottler, or origin location"
+  },
   { key: "government_warning", label: "Government warning", placeholder: "Warning statement status" }
 ];
+
+const alcoholTypeFieldHints: Record<AlcoholType, string> = {
+  distilled_spirits: "Use the spirits class/type from the label, such as Bourbon Whiskey, Vodka, or Gin.",
+  wine: "Use the wine designation or varietal, such as Red Wine, Dry Riesling, or Cabernet Sauvignon.",
+  malt_beverage: "Use the malt beverage class/type, such as Lager, Ale, Porter, or Malt Beverage."
+};
 
 export function ApplicationUpload() {
   const singleImageInputRef = useRef<HTMLInputElement>(null);
@@ -60,7 +72,8 @@ export function ApplicationUpload() {
   );
   const canSubmitSingle =
     singleForm.applicant_name.trim().length > 0 &&
-    singleForm.product_name.trim().length > 0 &&
+    singleForm.alcohol_type.trim().length > 0 &&
+    singleForm.class_type.trim().length > 0 &&
     singleForm.brand_name.trim().length > 0 &&
     singleImages.length > 0;
   const canSubmitBatch = Boolean(batchZipFile && batchCsvFile);
@@ -200,6 +213,25 @@ export function ApplicationUpload() {
               <span>{hasSingleData ? "Draft" : "Empty"}</span>
             </div>
             <div className="form-grid">
+              <label className="field-label">
+                Alcohol type
+                <select
+                  value={singleForm.alcohol_type}
+                  onChange={(event) => {
+                    const alcoholType = event.target.value as AlcoholType | "";
+                    const option = alcoholTypeOptions.find((candidate) => candidate.value === alcoholType);
+                    updateSingleField("alcohol_type", alcoholType);
+                    updateSingleField("application_type", option?.applicationType ?? "");
+                  }}
+                >
+                  <option value="">Select alcohol type</option>
+                  {alcoholTypeOptions.map((option) => (
+                    <option value={option.value} key={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
               {uploadFields.map((field) => (
                 <label className="field-label" key={field.key}>
                   {field.label}
@@ -208,6 +240,11 @@ export function ApplicationUpload() {
                     onChange={(event) => updateSingleField(field.key, event.target.value)}
                     placeholder={field.placeholder}
                   />
+                  {field.key === "class_type" && singleForm.alcohol_type ? (
+                    <span className="field-hint">
+                      {alcoholTypeFieldHints[singleForm.alcohol_type as AlcoholType]}
+                    </span>
+                  ) : null}
                 </label>
               ))}
             </div>
@@ -315,8 +352,9 @@ export function ApplicationUpload() {
             <div className="csv-format">
               <strong>CSV columns</strong>
               <p>
-                One row per application. Image columns can repeat by label, such as front_image_1,
-                front_image_2, back_image_1, neck_image_1, and government_warning_image_1.
+                One row per application. Include alcohol_type, brand_name, class_type,
+                alcohol_content, net_contents, and government_warning. Image columns can repeat by label,
+                such as front_image_1, front_image_2, back_image_1, neck_image_1, and government_warning_image_1.
               </p>
             </div>
             <div className="upload-actions">

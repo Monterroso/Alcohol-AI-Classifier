@@ -166,16 +166,46 @@ async function ensureImageBucket(supabase: ReturnType<typeof createServerSupabas
 }
 
 function submittedDataFromRow(row: Record<string, string>): SubmittedApplicationData {
+  const alcoholType = normalizeAlcoholType(row.alcohol_type ?? row.beverage_type ?? "");
   return {
     brand_name: row.brand_name ?? "",
+    class_type: row.class_type ?? row.class ?? row.type ?? "",
     product_name: row.product_name ?? "",
     alcohol_content: row.alcohol_content ?? "",
     net_contents: row.net_contents ?? "",
     origin: row.origin ?? "",
     government_warning: row.government_warning ?? "",
     applicant_name: row.applicant_name ?? "",
-    application_type: row.application_type ?? ""
+    alcohol_type: alcoholType,
+    application_type: row.application_type ?? applicationTypeForAlcoholType(alcoholType)
   };
+}
+
+function normalizeAlcoholType(value: string): SubmittedApplicationData["alcohol_type"] {
+  const normalized = value.trim().toLowerCase().replace(/[\s-]+/g, "_");
+  if (normalized === "distilled_spirits" || normalized === "spirits" || normalized === "spirit") {
+    return "distilled_spirits";
+  }
+  if (normalized === "wine") {
+    return "wine";
+  }
+  if (normalized === "malt_beverage" || normalized === "beer" || normalized === "malt") {
+    return "malt_beverage";
+  }
+  return "";
+}
+
+function applicationTypeForAlcoholType(alcoholType: SubmittedApplicationData["alcohol_type"]) {
+  if (alcoholType === "distilled_spirits") {
+    return "Distilled spirits label";
+  }
+  if (alcoholType === "wine") {
+    return "Wine label";
+  }
+  if (alcoholType === "malt_beverage") {
+    return "Malt beverage label";
+  }
+  return "";
 }
 
 function collectImageReferences(row: Record<string, string>) {

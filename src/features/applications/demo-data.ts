@@ -55,9 +55,11 @@ export const singleDemoPresets: SingleDemoPreset[] = [
     description: "All submitted fields appear cleanly on a front and back label.",
     submittedData: {
       applicant_name: "Old Tom Distillery LLC",
+      alcohol_type: "distilled_spirits",
       application_type: "Distilled spirits label",
       brand_name: "OLD TOM DISTILLERY",
-      product_name: "Kentucky Straight Bourbon Whiskey",
+      class_type: "Kentucky Straight Bourbon Whiskey",
+      product_name: "",
       alcohol_content: "45% Alc./Vol. (90 Proof)",
       net_contents: "750 mL",
       origin: "Frankfort, Kentucky",
@@ -81,9 +83,11 @@ export const singleDemoPresets: SingleDemoPreset[] = [
     description: "Application uses title case while the label uses all caps and punctuation.",
     submittedData: {
       applicant_name: "Stone's Throw Cellars",
+      alcohol_type: "wine",
       application_type: "Wine label",
       brand_name: "Stone's Throw",
-      product_name: "Dry Riesling",
+      class_type: "Dry Riesling",
+      product_name: "",
       alcohol_content: "12.8% ABV",
       net_contents: "750 mL",
       origin: "Finger Lakes, New York",
@@ -107,9 +111,11 @@ export const singleDemoPresets: SingleDemoPreset[] = [
     description: "Glare, angle, and blur make ABV and origin evidence lower confidence.",
     submittedData: {
       applicant_name: "Fogline Imports",
+      alcohol_type: "wine",
       application_type: "Wine label",
       brand_name: "Fogline",
-      product_name: "Pinot Gris",
+      class_type: "Pinot Gris",
+      product_name: "",
       alcohol_content: "13.5% ABV",
       net_contents: "750 mL",
       origin: "Willamette Valley, Oregon",
@@ -129,8 +135,10 @@ export const singleDemoPresets: SingleDemoPreset[] = [
     description: "The label evidence conflicts with the submitted brand and alcohol content.",
     submittedData: {
       applicant_name: "Blue Mesa Brewing Co.",
+      alcohol_type: "malt_beverage",
       application_type: "Malt beverage label",
       brand_name: "Blue Mesa",
+      class_type: "Lager",
       product_name: "Desert Lager",
       alcohol_content: "5.2% ABV",
       net_contents: "12 FL OZ",
@@ -151,8 +159,10 @@ export const singleDemoPresets: SingleDemoPreset[] = [
     description: "Front, neck, and two back-label photos cover different required fields.",
     submittedData: {
       applicant_name: "Northline Spirits LLC",
+      alcohol_type: "distilled_spirits",
       application_type: "Distilled spirits label",
       brand_name: "Northline",
+      class_type: "Bourbon Whiskey",
       product_name: "Reserve Bourbon",
       alcohol_content: "40% ALC/VOL",
       net_contents: "750 mL",
@@ -180,9 +190,11 @@ const extraBatchDemoRows: Record<string, BatchDemoRow> = {
   crownHarbor: {
     submittedData: {
       applicant_name: "Crown Harbor Imports",
+      alcohol_type: "distilled_spirits",
       application_type: "Distilled spirits label",
       brand_name: "Crown Harbor Gin",
-      product_name: "London Dry Gin",
+      class_type: "London Dry Gin",
+      product_name: "",
       alcohol_content: "43% Alc./Vol.",
       net_contents: "750 mL",
       origin: "United Kingdom",
@@ -199,8 +211,10 @@ const extraBatchDemoRows: Record<string, BatchDemoRow> = {
   sunbreak: {
     submittedData: {
       applicant_name: "Sunbreak Fermentation",
+      alcohol_type: "malt_beverage",
       application_type: "Malt beverage label",
       brand_name: "Sunbreak",
+      class_type: "India Pale Ale",
       product_name: "Hazy IPA",
       alcohol_content: "6.4% ABV",
       net_contents: "16 FL OZ",
@@ -278,8 +292,10 @@ export async function createBatchDemoFiles(preset: BatchDemoPreset = batchDemoPr
   const csvRows: string[][] = [
     [
       "applicant_name",
+      "alcohol_type",
       "application_type",
       "brand_name",
+      "class_type",
       "product_name",
       "alcohol_content",
       "net_contents",
@@ -306,8 +322,10 @@ export async function createBatchDemoFiles(preset: BatchDemoPreset = batchDemoPr
 
     csvRows.push([
       row.submittedData.applicant_name,
+      row.submittedData.alcohol_type,
       row.submittedData.application_type,
       row.submittedData.brand_name,
+      row.submittedData.class_type,
       row.submittedData.product_name,
       row.submittedData.alcohol_content,
       row.submittedData.net_contents,

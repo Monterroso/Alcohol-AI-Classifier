@@ -10,6 +10,8 @@ export type LabelType =
   | "government_warning"
   | "other";
 
+export type AlcoholType = "distilled_spirits" | "wine" | "malt_beverage";
+
 export type ExtractionStatus = "found" | "missing" | "ambiguous" | "conflict";
 
 export type ValidationStatus = "pass" | "fail" | "warning" | "unknown";
@@ -23,12 +25,14 @@ export type BBox = {
 
 export type SubmittedApplicationData = {
   brand_name: string;
+  class_type: string;
   product_name: string;
   alcohol_content: string;
   net_contents: string;
   origin: string;
   government_warning: string;
   applicant_name: string;
+  alcohol_type: AlcoholType | "";
   application_type: string;
 };
 
@@ -217,6 +221,7 @@ export const fieldDefinitions: Array<{
   key: keyof SubmittedApplicationData;
   label: string;
   requirement: string;
+  optional?: boolean;
 }> = [
   {
     key: "brand_name",
@@ -224,9 +229,15 @@ export const fieldDefinitions: Array<{
     requirement: "The brand name on the application should match the label text closely."
   },
   {
+    key: "class_type",
+    label: "Class/Type",
+    requirement: "The class or type designation should be present and match the beverage category, such as bourbon whiskey, table wine, or lager."
+  },
+  {
     key: "product_name",
-    label: "Product name",
-    requirement: "The product identity should be present and consistent across submitted data and label evidence."
+    label: "Product/fanciful name",
+    requirement: "Any product or fanciful name should be present and consistent across submitted data and label evidence when provided.",
+    optional: true
   },
   {
     key: "alcohol_content",
@@ -259,13 +270,33 @@ export const labelTypeOptions: Array<{ value: LabelType; label: string }> = [
   { value: "other", label: "Other" }
 ];
 
+export const alcoholTypeOptions: Array<{ value: AlcoholType; label: string; applicationType: string }> = [
+  {
+    value: "distilled_spirits",
+    label: "Distilled spirits",
+    applicationType: "Distilled spirits label"
+  },
+  {
+    value: "wine",
+    label: "Wine",
+    applicationType: "Wine label"
+  },
+  {
+    value: "malt_beverage",
+    label: "Malt beverage",
+    applicationType: "Malt beverage label"
+  }
+];
+
 export const emptySubmittedData: SubmittedApplicationData = {
   brand_name: "",
+  class_type: "",
   product_name: "",
   alcohol_content: "",
   net_contents: "",
   origin: "",
   government_warning: "",
   applicant_name: "",
+  alcohol_type: "",
   application_type: ""
 };

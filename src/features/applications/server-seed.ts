@@ -71,7 +71,9 @@ async function createSeedDatabase(supabase: ReturnType<typeof createServerSupaba
       id: "app-1001",
       application_number: "ALC-2026-1001",
       submitted_data: {
+        alcohol_type: "distilled_spirits",
         brand_name: "Northline",
+        class_type: "Bourbon Whiskey",
         product_name: "Northline Reserve Bourbon",
         alcohol_content: "40% ALC/VOL",
         net_contents: "750 ML",
@@ -92,7 +94,9 @@ async function createSeedDatabase(supabase: ReturnType<typeof createServerSupaba
       id: "app-1002",
       application_number: "ALC-2026-1002",
       submitted_data: {
+        alcohol_type: "wine",
         brand_name: "Cascadia",
+        class_type: "Pinot Gris",
         product_name: "Cascadia Pinot Gris",
         alcohol_content: "13.5% ABV",
         net_contents: "750 mL",
@@ -114,7 +118,9 @@ async function createSeedDatabase(supabase: ReturnType<typeof createServerSupaba
       id: "app-1003",
       application_number: "ALC-2026-1003",
       submitted_data: {
+        alcohol_type: "malt_beverage",
         brand_name: "Harbor Light",
+        class_type: "Lager",
         product_name: "Harbor Light Lager",
         alcohol_content: "5.0% ABV",
         net_contents: "12 FL OZ",
@@ -164,12 +170,14 @@ async function createSeedDatabase(supabase: ReturnType<typeof createServerSupaba
 
   const extracted_fields: ExtractedFieldRecord[] = [
     field("field-1001-brand", "app-1001", "brand_name", "Brand name", "Northline", 0.98, "found", "High confidence match on the front label."),
+    field("field-1001-class", "app-1001", "class_type", "Class/Type", "Bourbon", 0.94, "found", "Class/type appears on the front label."),
     field("field-1001-product", "app-1001", "product_name", "Product name", "Northline Reserve Bourbon", 0.96, "found", "Product identity appears on the front label."),
     field("field-1001-abv", "app-1001", "alcohol_content", "Alcohol content", "40% ALC/VOL", 0.94, "found", "Alcohol content is legible."),
     field("field-1001-net", "app-1001", "net_contents", "Net contents", "750 ML", 0.91, "found", "Net contents found near the alcohol content line."),
     field("field-1001-warning", "app-1001", "government_warning", "Government warning", "GOVERNMENT WARNING", 0.93, "found", "Required warning heading is visible."),
     field("field-1001-origin", "app-1001", "origin", "Origin", "Louisville, Kentucky", 0.9, "found", "Origin text appears on the back label."),
     field("field-1002-brand", "app-1002", "brand_name", "Brand name", "Cascadia", 0.97, "found", "High confidence match on the front label."),
+    field("field-1002-class", "app-1002", "class_type", "Class/Type", "Pinot Gris", 0.94, "found", "Class/type appears on the front label."),
     field("field-1002-product", "app-1002", "product_name", "Product name", "Cascadia Pinot Gris", 0.94, "found", "Product identity appears on the front label."),
     field("field-1002-abv", "app-1002", "alcohol_content", "Alcohol content", "13.5% ABV", 0.86, "found", "Alcohol content is readable but slightly low confidence."),
     field("field-1002-net", "app-1002", "net_contents", "Net contents", "750 mL", 0.88, "found", "Net contents found near the alcohol content line."),
@@ -197,9 +205,11 @@ async function createSeedDatabase(supabase: ReturnType<typeof createServerSupaba
 
   const validation_results: ValidationResultRecord[] = [
     validation("val-1001-brand", "app-1001", "brand_name", "pass", "Northline", "Northline", 0.98),
+    validation("val-1001-class", "app-1001", "class_type", "pass", "Bourbon Whiskey", "Bourbon", 0.94),
     validation("val-1001-product", "app-1001", "product_name", "pass", "Northline Reserve Bourbon", "Northline Reserve Bourbon", 0.96),
     validation("val-1001-warning", "app-1001", "government_warning", "pass", "Government warning present", "GOVERNMENT WARNING", 0.93),
     validation("val-1002-brand", "app-1002", "brand_name", "pass", "Cascadia", "Cascadia", 0.97),
+    validation("val-1002-class", "app-1002", "class_type", "pass", "Pinot Gris", "Pinot Gris", 0.94),
     validation("val-1002-origin", "app-1002", "origin", "warning", "Willamette Valley, Oregon", "Imported Wine", 0.42, "Origin evidence may conflict with submitted data.")
   ];
 

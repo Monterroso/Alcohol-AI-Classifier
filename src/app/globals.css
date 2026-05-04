@@ -249,6 +249,12 @@ textarea {
   resize: vertical;
 }
 
+.field-hint {
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
 button,
 .primary-link-button,
 .secondary-link,

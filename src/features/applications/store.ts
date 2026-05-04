@@ -111,12 +111,14 @@ function createDraftId(prefix: string) {
 function sanitizeSubmittedData(data: SubmittedApplicationData): SubmittedApplicationData {
   return {
     brand_name: data.brand_name.trim(),
+    class_type: data.class_type.trim(),
     product_name: data.product_name.trim(),
     alcohol_content: data.alcohol_content.trim(),
     net_contents: data.net_contents.trim(),
     origin: data.origin.trim(),
     government_warning: data.government_warning.trim(),
     applicant_name: data.applicant_name.trim(),
+    alcohol_type: data.alcohol_type,
     application_type: data.application_type.trim()
   };
 }

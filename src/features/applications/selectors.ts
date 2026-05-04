@@ -96,10 +96,11 @@ function buildQueueItem(database: ApplicationDatabase, application: ApplicationR
     application_number: application.application_number,
     product_name:
       application.submitted_data.product_name ||
+      application.submitted_data.class_type ||
       application.submitted_data.brand_name ||
       "Untitled application",
     applicant_name: application.submitted_data.applicant_name || "Applicant unavailable",
-    application_type: application.submitted_data.application_type || "Application type unavailable",
+    application_type: application.submitted_data.application_type || application.submitted_data.alcohol_type || "Application type unavailable",
     processing_status: application.processing_status,
     review_status: application.review_status,
     received_at: application.created_at,

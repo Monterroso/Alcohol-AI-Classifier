@@ -1076,14 +1076,17 @@ function runValidators(application: ApplicationRecord, fields: ExtractedFieldRec
     const field = byKey.get(definition.key);
     const submittedValue = application.submitted_data[definition.key];
     const extractedValue = field?.extracted_value ?? "";
+    const optionalAndBlank = definition.optional && !submittedValue.trim();
 
     results.push(
       validationResult(application.id, definition.key, `${definition.key}_required`, `${definition.label} is present`, {
-        result_status: field && field.extraction_status !== "missing" && extractedValue.trim() ? "pass" : "fail",
+        result_status: optionalAndBlank || (field && field.extraction_status !== "missing" && extractedValue.trim()) ? "pass" : "fail",
         submitted_value: submittedValue,
         extracted_value: extractedValue,
         score: field?.confidence,
-        message: extractedValue.trim() ? `${definition.label} was found on label evidence.` : `${definition.label} was not found.`
+        message: optionalAndBlank
+          ? `${definition.label} was not submitted and is optional.`
+          : extractedValue.trim() ? `${definition.label} was found on label evidence.` : `${definition.label} was not found.`
       })
     );
   }
@@ -1092,7 +1095,11 @@ function runValidators(application: ApplicationRecord, fields: ExtractedFieldRec
   results.push(validateFormat(application.id, "alcohol_content", "Alcohol content format", byKey.get("alcohol_content"), /\b\d{1,2}(\.\d+)?\s*%|\b\d{1,3}(\.\d+)?\s*proof\b/i));
   results.push(validateFormat(application.id, "net_contents", "Net contents format", byKey.get("net_contents"), /\b\d+(\.\d+)?\s*(ml|mL|l|L|oz|fl\.?\s*oz)\b/));
 
-  for (const key of ["brand_name", "product_name", "origin"] as const) {
+  for (const key of ["brand_name", "class_type", "product_name", "origin"] as const) {
+    if (key === "product_name" && !application.submitted_data[key].trim()) {
+      continue;
+    }
+
     const score = similarityScore(application.submitted_data[key], byKey.get(key)?.normalized_value || byKey.get(key)?.extracted_value || "");
     results.push(
       validationResult(application.id, key, `${key}_matches_submission`, `${fieldLabel(key)} matches submitted data`, {

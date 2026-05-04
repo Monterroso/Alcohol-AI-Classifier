@@ -169,7 +169,11 @@ export function ReviewWorkspace({ applicationId }: { applicationId: string }) {
             Back to queue
           </Link>
           <p className="eyebrow">Application Review</p>
-          <h1>{analysis.application.submitted_data.product_name || "Untitled application"}</h1>
+          <h1>
+            {analysis.application.submitted_data.product_name ||
+              analysis.application.submitted_data.class_type ||
+              "Untitled application"}
+          </h1>
           <p>
             {hasDocumentIntelligence
               ? `${analysis.status_message} ${
