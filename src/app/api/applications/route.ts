@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 
-import { createSingleApplication, readApplicationDatabase } from "@/features/applications/server-repository";
+import {
+  createSingleApplication,
+  deleteApplications,
+  readApplicationDatabase
+} from "@/features/applications/server-repository";
 import type { LabelType, SubmittedApplicationData } from "@/features/applications/types";
 
 export async function GET() {
@@ -32,6 +36,20 @@ export async function POST(request: Request) {
   } catch (error) {
     return NextResponse.json(
       { ok: false, error: error instanceof Error ? error.message : "Failed to submit application." },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const body = (await request.json()) as { applicationIds?: string[] };
+    const result = await deleteApplications(body.applicationIds ?? []);
+
+    return NextResponse.json({ ok: true, ...result });
+  } catch (error) {
+    return NextResponse.json(
+      { ok: false, error: error instanceof Error ? error.message : "Failed to delete applications." },
       { status: 500 }
     );
   }

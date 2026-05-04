@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit",
     "db:setup": "tsx scripts/setup-supabase-db.ts",
     "db:setup:seed": "tsx scripts/setup-supabase-db.ts --seed",
+    "storage:cleanup-orphaned-images": "tsx scripts/cleanup-orphaned-application-images.ts",
     "worker": "tsx worker/processor.ts",
     "worker:once": "tsx worker/processor.ts --once",
     "benchmark:extraction": "tsx worker/processor.ts --benchmark-extraction"

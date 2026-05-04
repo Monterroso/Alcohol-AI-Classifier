@@ -1,5 +1,6 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
+import { deleteAllApplications } from "./server-delete";
 import { normalizeApplicationImage } from "./image-normalization";
 import type {
   ApplicationDatabase,
@@ -17,15 +18,14 @@ const imageBucketName = "application-images";
 export async function resetSeedData() {
   const supabase = createServerSupabaseClient();
   await ensureImageBucket(supabase);
+  await deleteAllApplications(supabase);
   const seed = await createSeedDatabase(supabase);
 
   for (const table of [
     "validation_results",
     "extracted_field_evidence",
     "extracted_fields",
-    "ocr_text_blocks",
-    "application_images",
-    "applications"
+    "ocr_text_blocks"
   ]) {
     const { error } = await supabase.from(table).delete().not("id", "is", null);
     if (error) {

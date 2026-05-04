@@ -49,6 +49,16 @@ export async function submitApplicationDecision(applicationIds: string[], decisi
   });
 }
 
+export async function deleteSubmittedApplications(applicationIds: string[]) {
+  return requestJson("/api/applications", {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ applicationIds })
+  });
+}
+
 export async function resetApplicationSeedData() {
   return requestJson("/api/admin/reset-seed", {
     method: "POST"
