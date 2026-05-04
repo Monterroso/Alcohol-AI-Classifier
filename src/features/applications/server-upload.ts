@@ -78,12 +78,24 @@ async function insertApplicationWithImages(input: {
   }>;
 }) {
   const supabase = createServerSupabaseClient();
-  await ensureImageBucket(supabase);
 
   const timestamp = new Date().toISOString();
   const applicationId = `app-${crypto.randomUUID()}`;
   const applicationNumber = `ALC-${new Date().getFullYear()}-${Date.now().toString().slice(-8)}`;
   const submittedData = { ...emptySubmittedData, ...input.submittedData };
+
+  const normalizedImages = [];
+  for (const [index, image] of input.images.entries()) {
+    const normalizedImage = await normalizeApplicationImage({
+      bytes: image.bytes,
+      fileName: image.fileName || `label-${index + 1}.jpg`,
+      declaredMimeType: image.mimeType,
+      outputFormat: "jpeg"
+    });
+    normalizedImages.push({ source: image, normalized: normalizedImage });
+  }
+
+  await ensureImageBucket(supabase);
 
   const { error: applicationError } = await supabase.from("applications").insert({
     id: applicationId,
@@ -102,13 +114,7 @@ async function insertApplicationWithImages(input: {
 
   const imageRows: Omit<ApplicationImageRecord, "id">[] = [];
 
-  for (const [index, image] of input.images.entries()) {
-    const normalizedImage = await normalizeApplicationImage({
-      bytes: image.bytes,
-      fileName: image.fileName || `label-${index + 1}.jpg`,
-      declaredMimeType: image.mimeType,
-      outputFormat: "jpeg"
-    });
+  for (const { source: image, normalized: normalizedImage } of normalizedImages) {
     const storagePath = `${applicationId}/${crypto.randomUUID()}-${sanitizeFileName(normalizedImage.fileName)}`;
     const { error: uploadError } = await supabase.storage.from(imageBucketName).upload(storagePath, normalizedImage.bytes, {
       contentType: normalizedImage.mimeType,

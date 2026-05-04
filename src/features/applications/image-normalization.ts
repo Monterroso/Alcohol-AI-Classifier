@@ -1,5 +1,5 @@
 import { fileTypeFromBuffer } from "file-type";
-import sharp from "sharp";
+import sharp, { type SharpOptions } from "sharp";
 
 export type NormalizedImageFormat = "jpeg" | "png";
 
@@ -21,6 +21,7 @@ const supportedDetectedMimeTypes = new Set([
   "image/tiff",
   "image/webp"
 ]);
+const supportedImageDescription = "AVIF, GIF, HEIC/HEIF, JPEG, PNG, TIFF, WebP, or SVG";
 
 export async function normalizeApplicationImage(input: {
   bytes: Blob | ArrayBuffer | Uint8Array | Buffer | string;
@@ -33,25 +34,22 @@ export async function normalizeApplicationImage(input: {
   const detectedType = await fileTypeFromBuffer(source);
   const isSvg = isSvgInput(source, input.fileName, declaredMimeType);
 
+  const fileName = input.fileName || "Uploaded file";
+
   if (!isSvg && (!detectedType || !supportedDetectedMimeTypes.has(detectedType.mime))) {
-    throw new Error(`${input.fileName || "Uploaded file"} is not a supported image file.`);
+    throw new Error(`${fileName} is not a supported image file. Please upload ${supportedImageDescription}.`);
   }
 
   const outputFormat = input.outputFormat ?? "jpeg";
-  const pipeline = sharp(source, isSvg ? { density: 180 } : undefined).rotate();
-  const normalized =
-    outputFormat === "png"
-      ? await pipeline.png({ compressionLevel: 9 }).toBuffer({ resolveWithObject: true })
-      : await pipeline
-          .flatten({ background: "#ffffff" })
-          .jpeg({ quality: 92, mozjpeg: true })
-          .toBuffer({ resolveWithObject: true });
+  const sharpOptions: SharpOptions = isSvg ? { density: 180, failOn: "none" } : { failOn: "none" };
+  const pipeline = sharp(source, sharpOptions).rotate();
+  const normalized = await tryNormalizeImage(fileName, pipeline, outputFormat);
 
   const widthPx = normalized.info.width;
   const heightPx = normalized.info.height;
 
   if (!widthPx || !heightPx) {
-    throw new Error(`${input.fileName || "Uploaded file"} could not be decoded as an image.`);
+    throw new Error(`${fileName} could not be decoded as an image.`);
   }
 
   return {
@@ -61,6 +59,20 @@ export async function normalizeApplicationImage(input: {
     widthPx,
     heightPx
   };
+}
+
+async function tryNormalizeImage(fileName: string, pipeline: sharp.Sharp, outputFormat: NormalizedImageFormat) {
+  try {
+    return outputFormat === "png"
+      ? await pipeline.png({ compressionLevel: 9 }).toBuffer({ resolveWithObject: true })
+      : await pipeline
+          .flatten({ background: "#ffffff" })
+          .jpeg({ quality: 92, mozjpeg: true })
+          .toBuffer({ resolveWithObject: true });
+  } catch (error) {
+    const detail = error instanceof Error ? ` ${error.message}` : "";
+    throw new Error(`${fileName} could not be decoded as an image. The file may be corrupt or incomplete.${detail}`);
+  }
 }
 
 async function toBuffer(bytes: Blob | ArrayBuffer | Uint8Array | Buffer | string) {
