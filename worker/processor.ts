@@ -24,7 +24,11 @@ const batchSize = numberEnv("WORKER_BATCH_SIZE", 1);
 const applicationConcurrency = numberEnv("APPLICATION_CONCURRENCY", 1);
 const imageConcurrency = numberEnv("IMAGE_CONCURRENCY", 2);
 const canonicalGovernmentWarning =
-  "GOVERNMENT WARNING: According to the Surgeon General, women should not drink alcoholic beverages during pregnancy because of the risk of birth defects.";
+  "GOVERNMENT WARNING: (1) According to the Surgeon General, women should not drink alcoholic beverages during pregnancy because of the risk of birth defects. (2) Consumption of alcoholic beverages impairs your ability to drive a car or operate machinery, and may cause health problems.";
+const governmentWarningExtractionInstruction =
+  `For government_warning, search specifically for this full required text: "${canonicalGovernmentWarning}". ` +
+  "Do not treat GOVERNMENT WARNING, partial text, paraphrases, or general warning evidence as a found government_warning field. " +
+  "Return the full required text as extracted_value only when that full text is present; otherwise return the observed partial warning text with extraction_status \"ambiguous\" or an empty value with extraction_status \"missing\".";
 
 async function main() {
   const supabase = createWorkerSupabaseClient();
@@ -536,6 +540,7 @@ function findFuzzyTextCandidate(
 
 function findGovernmentWarningCandidate(ocrBlocks: OcrTextBlockRecord[]): DeterministicFieldCandidate {
   const fullText = ocrBlocks.map((block) => block.text).join(" ");
+  const hasExactWarning = fullText.includes(canonicalGovernmentWarning);
   const fullScore = governmentWarningScore(fullText);
   const scoredBlocks = ocrBlocks
     .map((block) => ({
@@ -550,17 +555,21 @@ function findGovernmentWarningCandidate(ocrBlocks: OcrTextBlockRecord[]): Determ
   }
 
   const evidenceBlocks = scoredBlocks.slice(0, 4).map((candidate) => candidate.block);
-  const extractedValue = evidenceBlocks.length > 0 ? evidenceBlocks.map((block) => block.text).join(" ") : fullText;
-  const confidence = clampConfidence(Math.max(fullScore, scoredBlocks[0]?.score ?? 0));
+  const extractedValue = hasExactWarning
+    ? canonicalGovernmentWarning
+    : evidenceBlocks.length > 0
+      ? evidenceBlocks.map((block) => block.text).join(" ")
+      : fullText;
+  const confidence = hasExactWarning ? 1 : clampConfidence(Math.max(fullScore, scoredBlocks[0]?.score ?? 0));
   return {
     extractedValue,
     normalizedValue: normalizeExtractedValue("government_warning", extractedValue),
     confidence,
-    status: confidence && confidence >= 0.72 ? "found" : "ambiguous",
+    status: hasExactWarning ? "found" : "ambiguous",
     explanation:
-      confidence && confidence >= 0.72
-        ? "Government warning text was found in OCR text."
-        : "Government warning evidence is present but may be incomplete.",
+      hasExactWarning
+        ? "The full required government warning text was found in OCR text."
+        : "Government warning evidence is present, but the full required text was not found.",
     evidenceBlocks
   };
 }
@@ -638,13 +647,16 @@ async function extractFieldsWithOpenAi(
       input: [
         {
           role: "system",
-          content:
-            "You extract alcohol label fields from OCR text. Return only the requested JSON schema. Use evidence_block_ids from the supplied OCR blocks when evidence supports a field."
+          content: [
+            "You extract alcohol label fields from OCR text. Return only the requested JSON schema. Use evidence_block_ids from the supplied OCR blocks when evidence supports a field.",
+            governmentWarningExtractionInstruction
+          ].join(" ")
         },
         {
           role: "user",
           content: JSON.stringify({
             submitted_data: application.submitted_data,
+            required_government_warning_text: canonicalGovernmentWarning,
             field_definitions: requestedDefinitions,
             images: images.map((image) => ({
               id: image.id,
@@ -707,8 +719,10 @@ async function extractFieldsWithGemini(
                 "You extract alcohol label fields from Azure OCR text.",
                 "Return only valid JSON that matches this shape: {\"fields\":[{\"field_key\":\"brand_name\",\"extracted_value\":\"\",\"normalized_value\":\"\",\"confidence\":0,\"extraction_status\":\"found\",\"explanation\":\"\",\"evidence_block_ids\":[]}]}",
                 "Only include the requested field_definitions. Use evidence_block_ids from the supplied OCR blocks when the text supports a field. If a field is not supported by OCR text, return an empty value with extraction_status \"missing\".",
+                governmentWarningExtractionInstruction,
                 JSON.stringify({
                   submitted_data: application.submitted_data,
+                  required_government_warning_text: canonicalGovernmentWarning,
                   field_definitions: requestedDefinitions,
                   images: images.map((image) => ({
                     id: image.id,
@@ -785,9 +799,11 @@ async function extractFieldsWithGeminiVisionForBenchmark(
               text: [
                 "You extract alcohol label fields directly from the provided label image or images.",
                 "Extract exactly what appears on the label. Return only valid JSON matching the requested schema.",
+                governmentWarningExtractionInstruction,
                 "Use an empty evidence_block_ids array because this direct vision benchmark does not receive OCR block ids.",
                 JSON.stringify({
                   submitted_data: application.submitted_data,
+                  required_government_warning_text: canonicalGovernmentWarning,
                   field_definitions: fieldDefinitions,
                   images: images.map((image) => ({
                     id: image.id,
@@ -1042,6 +1058,18 @@ function findEvidenceBlocksForExtractedValue(
     }
   }
 
+  if (fieldKey === "government_warning") {
+    const warningMatches = topScoredBlocks(
+      ocrBlocks,
+      (block) => Math.max(governmentWarningScore(block.text), warningKeywordScore(block.text)),
+      4,
+      0.15
+    ).map((candidate) => candidate.block);
+    if (warningMatches.length > 0) {
+      return sortOcrBlocksInReadingOrder(warningMatches);
+    }
+  }
+
   return topScoredBlocks(ocrBlocks, (block) => weightedTextScore(extractedValue, block.text, block.confidence), 4, 0.25).map((candidate) => candidate.block);
 }
 
@@ -1120,15 +1148,15 @@ function runValidators(application: ApplicationRecord, fields: ExtractedFieldRec
 
 function validateGovernmentWarning(applicationId: string, field?: ExtractedFieldRecord) {
   const extracted = field?.extracted_value ?? "";
-  const containsCanonical = normalizeText(extracted).includes(normalizeText(canonicalGovernmentWarning));
+  const exactMatch = extracted.trim() === canonicalGovernmentWarning;
   return validationResult(applicationId, "government_warning", "government_warning_exact_text", "Government warning exact text", {
-    result_status: containsCanonical ? "pass" : "fail",
+    result_status: exactMatch ? "pass" : "fail",
     submitted_value: canonicalGovernmentWarning,
     extracted_value: extracted,
-    score: containsCanonical ? 1 : 0,
-    message: containsCanonical
-      ? "The canonical government warning text appears on the label."
-      : "The canonical government warning text was not found exactly in label evidence."
+    score: exactMatch ? 1 : 0,
+    message: exactMatch
+      ? "The government warning text exactly matches the required text."
+      : "The government warning text must match the required text exactly."
   });
 }
 

@@ -14,6 +14,8 @@ import type {
 } from "./types";
 
 const imageBucketName = "application-images";
+const canonicalGovernmentWarning =
+  "GOVERNMENT WARNING: (1) According to the Surgeon General, women should not drink alcoholic beverages during pregnancy because of the risk of birth defects. (2) Consumption of alcoholic beverages impairs your ability to drive a car or operate machinery, and may cause health problems.";
 
 export async function resetSeedData() {
   const supabase = createServerSupabaseClient();
@@ -57,8 +59,16 @@ async function ensureImageBucket(supabase: ReturnType<typeof createServerSupabas
   }
 }
 
-function seedImageSvg(title: string, subtitle: string) {
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1200" viewBox="0 0 1800 1200"><rect width="1800" height="1200" fill="white"/><text x="900" y="480" text-anchor="middle" font-family="Arial" font-size="128">${escapeXml(title)}</text><text x="900" y="660" text-anchor="middle" font-family="Arial" font-size="88">${escapeXml(subtitle)}</text></svg>`;
+function seedImageSvg(title: string, subtitle: string, details: string[] = []) {
+  const detailLines = details.flatMap((detail) => wrapText(detail, 62));
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1200" viewBox="0 0 1800 1200">
+    <rect width="1800" height="1200" fill="white"/>
+    <text x="900" y="270" text-anchor="middle" font-family="Arial" font-size="128">${escapeXml(title)}</text>
+    <text x="900" y="420" text-anchor="middle" font-family="Arial" font-size="82">${escapeXml(subtitle)}</text>
+    ${detailLines
+      .map((line, index) => `<text x="900" y="${560 + index * 58}" text-anchor="middle" font-family="Arial" font-size="42" font-weight="700">${escapeXml(line)}</text>`)
+      .join("")}
+  </svg>`;
 }
 
 function bbox(x: number, y: number, width: number, height: number) {
@@ -146,7 +156,8 @@ async function createSeedDatabase(supabase: ReturnType<typeof createServerSupaba
       "NORTHLINE",
       "Back Label",
       "government_warning",
-      "northline-back.png"
+      "northline-back.png",
+      [canonicalGovernmentWarning, "Louisville, Kentucky"]
     ),
     seedImage(supabase, "img-1002-front", "app-1002", "CASCADIA", "Pinot Gris", "front", "cascadia-front.png"),
     seedImage(supabase, "img-1002-back", "app-1002", "CASCADIA", "Imported Wine", "back", "cascadia-back.png"),
@@ -158,7 +169,7 @@ async function createSeedDatabase(supabase: ReturnType<typeof createServerSupaba
     block("ocr-1001-product", "app-1001", "img-1001-front", "Reserve Bourbon", 0.96, bbox(25, 43, 50, 9), 2),
     block("ocr-1001-abv", "app-1001", "img-1001-front", "40% ALC/VOL", 0.94, bbox(34, 55, 32, 6), 3),
     block("ocr-1001-net", "app-1001", "img-1001-front", "750 ML", 0.91, bbox(53, 55, 16, 6), 4),
-    block("ocr-1001-warning", "app-1001", "img-1001-back", "GOVERNMENT WARNING", 0.93, bbox(24, 66, 52, 8), 5),
+    block("ocr-1001-warning", "app-1001", "img-1001-back", canonicalGovernmentWarning, 0.93, bbox(24, 66, 52, 8), 5),
     block("ocr-1001-origin", "app-1001", "img-1001-back", "Louisville, Kentucky", 0.9, bbox(27, 87, 46, 6), 6),
     block("ocr-1002-brand", "app-1002", "img-1002-front", "CASCADIA", 0.97, bbox(10.5, 16, 79, 18), 1),
     block("ocr-1002-product", "app-1002", "img-1002-front", "Pinot Gris", 0.94, bbox(31, 43, 38, 9), 2),
@@ -174,7 +185,7 @@ async function createSeedDatabase(supabase: ReturnType<typeof createServerSupaba
     field("field-1001-product", "app-1001", "product_name", "Product name", "Northline Reserve Bourbon", 0.96, "found", "Product identity appears on the front label."),
     field("field-1001-abv", "app-1001", "alcohol_content", "Alcohol content", "40% ALC/VOL", 0.94, "found", "Alcohol content is legible."),
     field("field-1001-net", "app-1001", "net_contents", "Net contents", "750 ML", 0.91, "found", "Net contents found near the alcohol content line."),
-    field("field-1001-warning", "app-1001", "government_warning", "Government warning", "GOVERNMENT WARNING", 0.93, "found", "Required warning heading is visible."),
+    field("field-1001-warning", "app-1001", "government_warning", "Government warning", canonicalGovernmentWarning, 0.93, "found", "Required warning text exactly matches the canonical text."),
     field("field-1001-origin", "app-1001", "origin", "Origin", "Louisville, Kentucky", 0.9, "found", "Origin text appears on the back label."),
     field("field-1002-brand", "app-1002", "brand_name", "Brand name", "Cascadia", 0.97, "found", "High confidence match on the front label."),
     field("field-1002-class", "app-1002", "class_type", "Class/Type", "Pinot Gris", 0.94, "found", "Class/type appears on the front label."),
@@ -207,7 +218,8 @@ async function createSeedDatabase(supabase: ReturnType<typeof createServerSupaba
     validation("val-1001-brand", "app-1001", "brand_name", "pass", "Northline", "Northline", 0.98),
     validation("val-1001-class", "app-1001", "class_type", "pass", "Bourbon Whiskey", "Bourbon", 0.94),
     validation("val-1001-product", "app-1001", "product_name", "pass", "Northline Reserve Bourbon", "Northline Reserve Bourbon", 0.96),
-    validation("val-1001-warning", "app-1001", "government_warning", "pass", "Government warning present", "GOVERNMENT WARNING", 0.93),
+    validation("val-1001-warning", "app-1001", "government_warning", "pass", canonicalGovernmentWarning, canonicalGovernmentWarning, 1),
+    validation("val-1002-warning", "app-1002", "government_warning", "fail", canonicalGovernmentWarning, "GOVERNMENT WARNING", 0, "The government warning text must match the required text exactly."),
     validation("val-1002-brand", "app-1002", "brand_name", "pass", "Cascadia", "Cascadia", 0.97),
     validation("val-1002-class", "app-1002", "class_type", "pass", "Pinot Gris", "Pinot Gris", 0.94),
     validation("val-1002-origin", "app-1002", "origin", "warning", "Willamette Valley, Oregon", "Imported Wine", 0.42, "Origin evidence may conflict with submitted data.")
@@ -230,10 +242,11 @@ async function seedImage(
   title: string,
   subtitle: string,
   labelType: LabelType,
-  filename: string
+  filename: string,
+  details: string[] = []
 ) {
   const normalizedImage = await normalizeApplicationImage({
-    bytes: seedImageSvg(title, subtitle),
+    bytes: seedImageSvg(title, subtitle, details),
     fileName: filename,
     declaredMimeType: "image/svg+xml",
     outputFormat: "png"
@@ -293,6 +306,27 @@ function escapeXml(value: string) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+function wrapText(text: string, maxChars: number) {
+  const words = text.split(" ");
+  const lines: string[] = [];
+  let line = "";
+
+  for (const word of words) {
+    const next = line ? `${line} ${word}` : word;
+    if (next.length > maxChars && line) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = next;
+    }
+  }
+
+  if (line) {
+    lines.push(line);
+  }
+  return lines;
 }
 
 function block(

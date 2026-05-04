@@ -252,7 +252,7 @@ export const fieldDefinitions: Array<{
   {
     key: "government_warning",
     label: "Government warning",
-    requirement: "Required warning text should be present and readable where applicable."
+    requirement: "The full required government warning text must appear exactly; headings, partial warning text, or paraphrases are not sufficient. GOVERNMENT WARNING: (1) According to the Surgeon General, women should not drink alcoholic beverages during pregnancy because of the risk of birth defects. (2) Consumption of alcoholic beverages impairs your ability to drive a car or operate machinery, and may cause health problems."
   },
   {
     key: "origin",

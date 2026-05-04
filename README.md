@@ -50,7 +50,7 @@ The highest-priority problems we focused on were:
   Label images remain visible and accessible during review. When a reviewer selects a field, the app highlights the supporting label evidence so the reviewer can see where the confidence score came from and make their own determination when needed.
 
 - **Validation results**
-  The app validates required fields, compares extracted values against submitted data, checks alcohol-content and net-contents formats, and checks for the canonical government warning text.
+  The app validates required fields, compares extracted values against submitted data, checks alcohol-content and net-contents formats, and requires an exact match for the canonical government warning text.
 
 - **Human-in-the-loop decisions**
   The system provides recommendations and evidence, but the reviewer makes the final decision. Applications can be approved, rejected, or marked as needing changes.
@@ -155,8 +155,8 @@ This project is a proof of concept built under time constraints, so we prioritiz
 
 - The app supports batch intake, but the worker processes applications according to configured batch and concurrency settings to avoid provider rate-limit issues during the prototype.
 - Deterministic extraction can run quickly, but LLM-assisted review may take longer depending on provider latency and OCR complexity.
-- The validation engine covers core fields and checks for government warning evidence, but the government warning still needs to be nailed down more strictly. Today it checks for the warning text rather than fully enforcing every letter, capitalization, and formatting requirement. This is a natural next addition to the rules engine.
-- The validation engine does not yet encode every TTB rule variation by beverage type.
+- The validation engine intentionally simplifies the review flow around core fields, format checks, and exact canonical government warning text. It is not a complete automated government compliance engine.
+- The validation engine does not yet encode every TTB rule variation by beverage type, label placement, product category, or exception path.
 - We did not build a full automated accuracy test suite or statistical benchmark dataset in this prototype.
 - Production deployment would need deeper security, retention, audit logging, access control, and compliance hardening.
 - The prototype database is not fully locked down with production-grade row-level security. For a production deployment, Supabase RLS policies would be added so users can only access the applications and review data they are authorized to see. Because this prototype does not use classified or sensitive production data, we prioritized the end-to-end review workflow over a full access-control model.

@@ -46,7 +46,7 @@ type BatchDemoPresetDefinition = BatchDemoPreset & {
 };
 
 const standardWarning =
-  "GOVERNMENT WARNING: According to the Surgeon General, women should not drink alcoholic beverages during pregnancy because of the risk of birth defects.";
+  "GOVERNMENT WARNING: (1) According to the Surgeon General, women should not drink alcoholic beverages during pregnancy because of the risk of birth defects. (2) Consumption of alcoholic beverages impairs your ability to drive a car or operate machinery, and may cause health problems.";
 
 export const singleDemoPresets: SingleDemoPreset[] = [
   {
@@ -71,7 +71,7 @@ export const singleDemoPresets: SingleDemoPreset[] = [
         "750 mL",
         "Frankfort, Kentucky"
       ], "#9f5f20", "#fbf5e8"),
-      label("old-tom-back-warning.png", "government_warning", "OLD TOM DISTILLERY", "Back Label", [
+      label("old-tom-back-warning.png", "government_warning", "OLD TOM DISTILLERY", "Government Warning", [
         standardWarning,
         "Bottled by Old Tom Distillery LLC, Frankfort, KY"
       ], "#355d4c", "#f2f7f3", "warning")
@@ -126,7 +126,10 @@ export const singleDemoPresets: SingleDemoPreset[] = [
         "13.5% ABV",
         "750 mL",
         "Willamette Valley, Oregon"
-      ], "#7b5aa6", "#f5f3ff", "hard-read")
+      ], "#7b5aa6", "#f5f3ff", "hard-read"),
+      label("fogline-warning.png", "government_warning", "FOGLINE", "Government Warning", [
+        standardWarning
+      ], "#355d4c", "#f2f7f3", "warning")
     ]
   },
   {
@@ -150,7 +153,10 @@ export const singleDemoPresets: SingleDemoPreset[] = [
         "6.1% ABV",
         "12 FL OZ",
         "Santa Fe, New Mexico"
-      ], "#c96b32", "#fff4e8", "mismatch")
+      ], "#c96b32", "#fff4e8", "mismatch"),
+      label("mesa-azul-warning.png", "government_warning", "MESA AZUL", "Government Warning", [
+        standardWarning
+      ], "#355d4c", "#f2f7f3", "warning")
     ]
   },
   {
@@ -205,7 +211,10 @@ const extraBatchDemoRows: Record<string, BatchDemoRow> = {
         "43% Alc./Vol.",
         "750 mL",
         "Imported from Scotland"
-      ], "#245a73", "#eff8fb", "mismatch")
+      ], "#245a73", "#eff8fb", "mismatch"),
+      label("crown-harbor-warning.png", "government_warning", "CROWN HARBOR", "Government Warning", [
+        standardWarning
+      ], "#355d4c", "#f2f7f3", "warning")
     ]
   },
   sunbreak: {
@@ -232,7 +241,7 @@ const extraBatchDemoRows: Record<string, BatchDemoRow> = {
         "Brewed and canned by Sunbreak Fermentation"
       ], "#3a7b63", "#eef8f2", "detail"),
       label("sunbreak-warning.png", "government_warning", "Sunbreak", "Government Warning", [
-        "Government Warning: According to the Surgeon General, women should not drink alcoholic beverages during pregnancy."
+        standardWarning
       ], "#9b3b2f", "#fff1f0", "warning")
     ]
   }
@@ -387,7 +396,10 @@ function renderLabelSvg(image: DemoLabelImage) {
   const rotation = image.variant === "hard-read" ? -5 : 0;
   const filter = image.variant === "hard-read" ? "filter=\"url(#blurred)\"" : "";
   const warningCase = image.variant === "warning";
-  const detailLines = image.details.flatMap((detail) => wrapText(detail, 44));
+  const detailLines = image.details.flatMap((detail) => wrapText(detail, warningCase ? 46 : 44));
+  const detailStartY = warningCase ? 415 : 460;
+  const detailStepY = warningCase ? 38 : 42;
+  const footerY = warningCase ? 775 : 720;
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900">
     <defs>
@@ -406,10 +418,10 @@ function renderLabelSvg(image: DemoLabelImage) {
       ${detailLines
         .map(
           (line, index) =>
-            `<text x="600" y="${460 + index * 42}" text-anchor="middle" font-family="Arial, sans-serif" font-size="${warningCase ? 28 : 34}" font-weight="${warningCase ? 700 : 600}" fill="#263331" ${filter}>${escapeXml(line)}</text>`
+            `<text x="600" y="${detailStartY + index * detailStepY}" text-anchor="middle" font-family="Arial, sans-serif" font-size="${warningCase ? 24 : 34}" font-weight="${warningCase ? 700 : 600}" fill="#263331" ${filter}>${escapeXml(line)}</text>`
         )
         .join("")}
-      <text x="600" y="720" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#62716e">AI-generated demo label artwork</text>
+      <text x="600" y="${footerY}" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#62716e">AI-generated demo label artwork</text>
     </g>
     ${
       image.variant === "hard-read"
