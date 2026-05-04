@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 import { FileArchive, FileSpreadsheet, FileUp, Images, Send, Sparkles, Trash2 } from "lucide-react";
 
 import {
+  batchDemoPresets,
   createBatchDemoFiles,
   createSingleDemoDraft,
   singleDemoPresets
@@ -35,6 +36,7 @@ const uploadFields: Array<{
 export function ApplicationUpload() {
   const singleImageInputRef = useRef<HTMLInputElement>(null);
   const [singleDemoPresetId, setSingleDemoPresetId] = useState(singleDemoPresets[0].id);
+  const [batchDemoPresetId, setBatchDemoPresetId] = useState(batchDemoPresets[0].id);
   const [isDemoLoading, setIsDemoLoading] = useState(false);
   const [demoSummary, setDemoSummary] = useState<string | null>(null);
   const uploadMode = useApplicationStore((state) => state.uploadMode);
@@ -64,6 +66,8 @@ export function ApplicationUpload() {
   const canSubmitBatch = Boolean(batchZipFile && batchCsvFile);
   const selectedSingleDemo =
     singleDemoPresets.find((preset) => preset.id === singleDemoPresetId) ?? singleDemoPresets[0];
+  const selectedBatchDemo =
+    batchDemoPresets.find((preset) => preset.id === batchDemoPresetId) ?? batchDemoPresets[0];
 
   async function handleLoadSingleDemo() {
     setIsDemoLoading(true);
@@ -87,10 +91,12 @@ export function ApplicationUpload() {
     setIsDemoLoading(true);
     setDemoSummary(null);
     try {
-      const demo = await createBatchDemoFiles();
+      const demo = await createBatchDemoFiles(selectedBatchDemo);
       setBatchZipFile(demo.zipFile);
       setBatchCsvFile(demo.csvFile);
-      setDemoSummary(`Loaded a ${demo.applicationCount}-application batch with ${demo.imageCount} generated images.`);
+      setDemoSummary(
+        `Loaded ${demo.presetName}: ${demo.applicationCount} applications with ${demo.imageCount} generated images.`
+      );
     } catch (error) {
       setDemoSummary(error instanceof Error ? error.message : "Could not load the batch demo files.");
     } finally {
@@ -129,39 +135,59 @@ export function ApplicationUpload() {
       </section>
 
       <aside className="demo-float" aria-label="Demo presets">
-        <strong>Add Data for Demo</strong>
-        <select
-          value={singleDemoPresetId}
-          onChange={(event) => setSingleDemoPresetId(event.target.value)}
-          title="Single upload demo preset"
-          aria-label="Single upload demo preset"
-        >
-          {singleDemoPresets.map((preset) => (
-            <option value={preset.id} key={preset.id}>
-              {preset.name}
-            </option>
-          ))}
-        </select>
-        <button
-          className="icon-button demo-float-button"
-          type="button"
-          onClick={handleLoadSingleDemo}
-          disabled={isDemoLoading}
-          title={`Load single demo: ${selectedSingleDemo.name}`}
-          aria-label={`Load single demo: ${selectedSingleDemo.name}`}
-        >
-          <Sparkles aria-hidden="true" size={18} />
-        </button>
-        <button
-          className="icon-button demo-float-button"
-          type="button"
-          onClick={handleLoadBatchDemo}
-          disabled={isDemoLoading}
-          title="Load batch demo"
-          aria-label="Load batch demo"
-        >
-          <FileArchive aria-hidden="true" size={18} />
-        </button>
+        {uploadMode === "single" ? (
+          <>
+            <select
+              value={singleDemoPresetId}
+              onChange={(event) => setSingleDemoPresetId(event.target.value)}
+              title="Single upload demo preset"
+              aria-label="Single upload demo preset"
+            >
+              {singleDemoPresets.map((preset) => (
+                <option value={preset.id} key={preset.id}>
+                  {preset.name}
+                </option>
+              ))}
+            </select>
+            <button
+              className="demo-float-button"
+              type="button"
+              onClick={handleLoadSingleDemo}
+              disabled={isDemoLoading}
+              title={`Load single demo: ${selectedSingleDemo.name}`}
+              aria-label={`Load single demo: ${selectedSingleDemo.name}`}
+            >
+              <Sparkles aria-hidden="true" size={18} />
+              Add Data for Demo
+            </button>
+          </>
+        ) : (
+          <>
+            <select
+              value={batchDemoPresetId}
+              onChange={(event) => setBatchDemoPresetId(event.target.value)}
+              title="Batch upload demo preset"
+              aria-label="Batch upload demo preset"
+            >
+              {batchDemoPresets.map((preset) => (
+                <option value={preset.id} key={preset.id}>
+                  {preset.name}
+                </option>
+              ))}
+            </select>
+            <button
+              className="demo-float-button"
+              type="button"
+              onClick={handleLoadBatchDemo}
+              disabled={isDemoLoading}
+              title={`Load batch demo: ${selectedBatchDemo.name}`}
+              aria-label={`Load batch demo: ${selectedBatchDemo.name}`}
+            >
+              <FileArchive aria-hidden="true" size={18} />
+              Add Batch Demo Data
+            </button>
+          </>
+        )}
       </aside>
 
       {demoSummary ? <div className="success-strip">{demoSummary}</div> : null}

@@ -19,6 +19,12 @@ export type SingleDemoPreset = {
   images: DemoLabelImage[];
 };
 
+export type BatchDemoPreset = {
+  id: string;
+  name: string;
+  description: string;
+};
+
 type DemoLabelImage = {
   fileName: string;
   labelType: LabelType;
@@ -33,6 +39,10 @@ type DemoLabelImage = {
 type BatchDemoRow = {
   submittedData: SubmittedApplicationData;
   images: DemoLabelImage[];
+};
+
+type BatchDemoPresetDefinition = BatchDemoPreset & {
+  rows: BatchDemoRow[];
 };
 
 const standardWarning =
@@ -166,6 +176,92 @@ export const singleDemoPresets: SingleDemoPreset[] = [
   }
 ];
 
+const extraBatchDemoRows: Record<string, BatchDemoRow> = {
+  crownHarbor: {
+    submittedData: {
+      applicant_name: "Crown Harbor Imports",
+      application_type: "Distilled spirits label",
+      brand_name: "Crown Harbor Gin",
+      product_name: "London Dry Gin",
+      alcohol_content: "43% Alc./Vol.",
+      net_contents: "750 mL",
+      origin: "United Kingdom",
+      government_warning: "Government warning present"
+    },
+    images: [
+      label("crown-harbor-front.png", "front", "CROWN HARBOR", "London Dry Gin", [
+        "43% Alc./Vol.",
+        "750 mL",
+        "Imported from Scotland"
+      ], "#245a73", "#eff8fb", "mismatch")
+    ]
+  },
+  sunbreak: {
+    submittedData: {
+      applicant_name: "Sunbreak Fermentation",
+      application_type: "Malt beverage label",
+      brand_name: "Sunbreak",
+      product_name: "Hazy IPA",
+      alcohol_content: "6.4% ABV",
+      net_contents: "16 FL OZ",
+      origin: "San Diego, California",
+      government_warning: "Government warning present"
+    },
+    images: [
+      label("sunbreak-front-hero.png", "front", "SUNBREAK", "Hazy IPA", [
+        "6.4% ABV",
+        "16 FL OZ",
+        "San Diego, California"
+      ], "#d39f24", "#fff8dc"),
+      label("sunbreak-front-can-side.png", "front", "SUNBREAK", "Can Side Panel", [
+        "Hazy IPA",
+        "Brewed and canned by Sunbreak Fermentation"
+      ], "#3a7b63", "#eef8f2", "detail"),
+      label("sunbreak-warning.png", "government_warning", "Sunbreak", "Government Warning", [
+        "Government Warning: According to the Surgeon General, women should not drink alcoholic beverages during pregnancy."
+      ], "#9b3b2f", "#fff1f0", "warning")
+    ]
+  }
+};
+
+const batchDemoPresetDefinitions: BatchDemoPresetDefinition[] = [
+  {
+    id: "balanced-batch",
+    name: "Balanced batch",
+    description: "A broad batch with clean, fuzzy, hard-to-read, mismatch, and multi-image examples.",
+    rows: [
+      singleDemoPresets[0],
+      singleDemoPresets[1],
+      singleDemoPresets[2],
+      singleDemoPresets[3],
+      extraBatchDemoRows.crownHarbor,
+      extraBatchDemoRows.sunbreak
+    ]
+  },
+  {
+    id: "clean-review-batch",
+    name: "Clean review batch",
+    description: "Mostly clean applications for quickly filling the queue with likely approvals.",
+    rows: [singleDemoPresets[0], singleDemoPresets[1], singleDemoPresets[4]]
+  },
+  {
+    id: "issue-review-batch",
+    name: "Issue review batch",
+    description: "Applications with conflicts, missing evidence, or harder label photos.",
+    rows: [singleDemoPresets[2], singleDemoPresets[3], extraBatchDemoRows.crownHarbor]
+  },
+  {
+    id: "multi-image-batch",
+    name: "Multi-image batch",
+    description: "Applications that include multiple photos for one label or split evidence across labels.",
+    rows: [singleDemoPresets[4], extraBatchDemoRows.sunbreak]
+  }
+];
+
+export const batchDemoPresets: BatchDemoPreset[] = batchDemoPresetDefinitions.map(
+  ({ id, name, description }) => ({ id, name, description })
+);
+
 export async function createSingleDemoDraft(preset: SingleDemoPreset) {
   return {
     submittedData: preset.submittedData,
@@ -173,10 +269,12 @@ export async function createSingleDemoDraft(preset: SingleDemoPreset) {
   };
 }
 
-export async function createBatchDemoFiles() {
+export async function createBatchDemoFiles(preset: BatchDemoPreset = batchDemoPresets[0]) {
   const JSZip = (await import("jszip")).default;
   const zip = new JSZip();
-  const rows = batchDemoRows();
+  const selectedPreset =
+    batchDemoPresetDefinitions.find((definition) => definition.id === preset.id) ?? batchDemoPresetDefinitions[0];
+  const rows = selectedPreset.rows;
   const csvRows: string[][] = [
     [
       "applicant_name",
@@ -227,8 +325,9 @@ export async function createBatchDemoFiles() {
   const csvBlob = new Blob([csvRows.map(toCsvRow).join("\n")], { type: "text/csv" });
 
   return {
-    zipFile: new File([zipBlob], "alcohol-label-demo-images.zip", { type: "application/zip" }),
-    csvFile: new File([csvBlob], "alcohol-label-demo-applications.csv", { type: "text/csv" }),
+    zipFile: new File([zipBlob], `${selectedPreset.id}-images.zip`, { type: "application/zip" }),
+    csvFile: new File([csvBlob], `${selectedPreset.id}-applications.csv`, { type: "text/csv" }),
+    presetName: selectedPreset.name,
     applicationCount: rows.length,
     imageCount: rows.reduce((total, row) => total + row.images.length, 0)
   };
@@ -251,60 +350,6 @@ function createDraftId(prefix: string) {
     return `${prefix}-${crypto.randomUUID()}`;
   }
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-}
-
-function batchDemoRows(): BatchDemoRow[] {
-  return [
-    singleDemoPresets[0],
-    singleDemoPresets[1],
-    singleDemoPresets[2],
-    singleDemoPresets[3],
-    {
-      submittedData: {
-        applicant_name: "Crown Harbor Imports",
-        application_type: "Distilled spirits label",
-        brand_name: "Crown Harbor Gin",
-        product_name: "London Dry Gin",
-        alcohol_content: "43% Alc./Vol.",
-        net_contents: "750 mL",
-        origin: "United Kingdom",
-        government_warning: "Government warning present"
-      },
-      images: [
-        label("crown-harbor-front.png", "front", "CROWN HARBOR", "London Dry Gin", [
-          "43% Alc./Vol.",
-          "750 mL",
-          "Imported from Scotland"
-        ], "#245a73", "#eff8fb", "mismatch")
-      ]
-    },
-    {
-      submittedData: {
-        applicant_name: "Sunbreak Fermentation",
-        application_type: "Malt beverage label",
-        brand_name: "Sunbreak",
-        product_name: "Hazy IPA",
-        alcohol_content: "6.4% ABV",
-        net_contents: "16 FL OZ",
-        origin: "San Diego, California",
-        government_warning: "Government warning present"
-      },
-      images: [
-        label("sunbreak-front-hero.png", "front", "SUNBREAK", "Hazy IPA", [
-          "6.4% ABV",
-          "16 FL OZ",
-          "San Diego, California"
-        ], "#d39f24", "#fff8dc"),
-        label("sunbreak-front-can-side.png", "front", "SUNBREAK", "Can Side Panel", [
-          "Hazy IPA",
-          "Brewed and canned by Sunbreak Fermentation"
-        ], "#3a7b63", "#eef8f2", "detail"),
-        label("sunbreak-warning.png", "government_warning", "Sunbreak", "Government Warning", [
-          "Government Warning: According to the Surgeon General, women should not drink alcoholic beverages during pregnancy."
-        ], "#9b3b2f", "#fff1f0", "warning")
-      ]
-    }
-  ];
 }
 
 function label(

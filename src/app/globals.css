@@ -633,20 +633,6 @@ input[type="checkbox"] {
   backdrop-filter: blur(12px);
 }
 
-.demo-float strong {
-  min-height: 40px;
-  display: inline-flex;
-  align-items: center;
-  border-radius: 6px;
-  background: #dc2626;
-  color: #fff;
-  padding: 0 12px;
-  font-size: 0.9rem;
-  font-weight: 900;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
 .demo-float select {
   width: min(250px, 42vw);
   min-height: 40px;
@@ -654,12 +640,16 @@ input[type="checkbox"] {
 
 .demo-float-button {
   flex: 0 0 auto;
-  width: 52px;
-  height: 52px;
+  min-height: 44px;
+  padding: 0 14px;
   border-color: #b42318;
   background: #dc2626;
   color: #fff;
   box-shadow: 0 10px 24px rgba(180, 35, 24, 0.34);
+  font-size: 0.86rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .demo-float-button:hover:not(:disabled) {
@@ -668,8 +658,8 @@ input[type="checkbox"] {
 }
 
 .demo-float-button svg {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
 }
 
 .image-draft-row,
@@ -1216,14 +1206,14 @@ input[type="checkbox"] {
     justify-content: flex-end;
   }
 
-  .demo-float strong {
-    font-size: 0.78rem;
-    padding: 0 8px;
-  }
-
   .demo-float select {
     flex: 1 1 auto;
     width: auto;
     min-width: 0;
+  }
+
+  .demo-float-button {
+    padding: 0 10px;
+    font-size: 0.76rem;
   }
 }
