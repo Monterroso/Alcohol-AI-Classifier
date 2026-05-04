@@ -10,7 +10,8 @@
     "db:setup": "tsx scripts/setup-supabase-db.ts",
     "db:setup:seed": "tsx scripts/setup-supabase-db.ts --seed",
     "worker": "tsx worker/processor.ts",
-    "worker:once": "tsx worker/processor.ts --once"
+    "worker:once": "tsx worker/processor.ts --once",
+    "benchmark:extraction": "tsx worker/processor.ts --benchmark-extraction"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.105.1",

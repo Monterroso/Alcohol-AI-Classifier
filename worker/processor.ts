@@ -361,15 +361,23 @@ async function extractFields(
 ) {
   const mode = (process.env.EXTRACTION_MODE ?? "deterministic").toLowerCase();
   if (mode === "openai" || mode === "llm") {
-    return extractFieldsWithOpenAi(application, images, ocrBlocks);
+    return extractFieldsWithProvider("openai", application, images, ocrBlocks, allFieldKeys(), ocrBlocks);
+  }
+
+  if (mode === "gemini") {
+    return extractFieldsWithProvider("gemini", application, images, ocrBlocks, allFieldKeys(), ocrBlocks);
   }
 
   const extracted = extractFieldsDeterministically(application, ocrBlocks);
-  if (mode !== "hybrid" || extracted.fields.every((field) => field.extraction_status === "found" && (field.confidence ?? 0) >= 0.72)) {
+  const unresolvedFieldKeys = findUnresolvedFieldKeys(extracted.fields);
+  if (mode !== "hybrid" || unresolvedFieldKeys.length === 0) {
     return extracted;
   }
 
-  return extractFieldsWithOpenAi(application, images, ocrBlocks);
+  const provider = fallbackExtractionProvider();
+  const fallbackOcrBlocks = selectFallbackOcrBlocks(application, ocrBlocks, unresolvedFieldKeys, extracted);
+  const fallback = await extractFieldsWithProvider(provider, application, images, fallbackOcrBlocks, unresolvedFieldKeys, ocrBlocks);
+  return mergeExtractionResults(extracted, fallback, unresolvedFieldKeys);
 }
 
 function extractFieldsDeterministically(application: ApplicationRecord, ocrBlocks: OcrTextBlockRecord[]) {
@@ -568,13 +576,57 @@ function missingCandidate(fieldKey: keyof SubmittedApplicationData, explanation:
   };
 }
 
+type FieldExtractionResult = ReturnType<typeof extractFieldsDeterministically>;
+type ExtractionProvider = "openai" | "gemini";
+
+function allFieldKeys() {
+  return fieldDefinitions.map((field) => field.key);
+}
+
+function findUnresolvedFieldKeys(fields: ExtractedFieldRecord[]) {
+  return fields
+    .filter((field) => field.extraction_status !== "found" || (field.confidence ?? 0) < 0.72)
+    .map((field) => field.field_key);
+}
+
+function fallbackExtractionProvider(): ExtractionProvider {
+  const defaultProvider = process.env.GEMINI_API_KEY ? "gemini" : "openai";
+  const provider = (process.env.EXTRACTION_PROVIDER ?? process.env.LLM_PROVIDER ?? defaultProvider).toLowerCase();
+  if (provider === "openai" || provider === "llm") {
+    return "openai";
+  }
+  if (provider === "gemini" || provider === "google") {
+    return "gemini";
+  }
+
+  throw new Error(`Unsupported extraction provider: ${provider}`);
+}
+
+async function extractFieldsWithProvider(
+  provider: ExtractionProvider,
+  application: ApplicationRecord,
+  images: ApplicationImageRecord[],
+  providerOcrBlocks: OcrTextBlockRecord[],
+  requestedFieldKeys: Array<keyof SubmittedApplicationData>,
+  evidenceOcrBlocks: OcrTextBlockRecord[]
+) {
+  if (provider === "gemini") {
+    return extractFieldsWithGemini(application, images, providerOcrBlocks, requestedFieldKeys, evidenceOcrBlocks);
+  }
+
+  return extractFieldsWithOpenAi(application, images, providerOcrBlocks, requestedFieldKeys, evidenceOcrBlocks);
+}
+
 async function extractFieldsWithOpenAi(
   application: ApplicationRecord,
   images: ApplicationImageRecord[],
-  ocrBlocks: OcrTextBlockRecord[]
+  ocrBlocks: OcrTextBlockRecord[],
+  requestedFieldKeys: Array<keyof SubmittedApplicationData>,
+  evidenceOcrBlocks: OcrTextBlockRecord[]
 ) {
   const apiKey = requiredEnv("OPENAI_API_KEY");
   const model = process.env.OPENAI_MODEL ?? "gpt-5-mini";
+  const requestedDefinitions = fieldDefinitions.filter((field) => requestedFieldKeys.includes(field.key));
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: {
@@ -593,7 +645,7 @@ async function extractFieldsWithOpenAi(
           role: "user",
           content: JSON.stringify({
             submitted_data: application.submitted_data,
-            field_definitions: fieldDefinitions,
+            field_definitions: requestedDefinitions,
             images: images.map((image) => ({
               id: image.id,
               label_type: image.label_type,
@@ -614,7 +666,7 @@ async function extractFieldsWithOpenAi(
           type: "json_schema",
           name: "alcohol_label_extraction",
           strict: true,
-          schema: extractionSchema
+          schema: extractionSchemaFor(requestedFieldKeys)
         }
       }
     })
@@ -627,10 +679,152 @@ async function extractFieldsWithOpenAi(
   const json = await response.json();
   const outputText = extractOpenAiText(json);
   const parsed = JSON.parse(outputText) as ExtractionResponse;
-  return mapExtractionResponse(application.id, parsed, ocrBlocks);
+  return mapExtractionResponse(application.id, parsed, evidenceOcrBlocks, requestedFieldKeys, "OpenAI");
 }
 
-function mapExtractionResponse(applicationId: string, response: ExtractionResponse, ocrBlocks: OcrTextBlockRecord[]) {
+async function extractFieldsWithGemini(
+  application: ApplicationRecord,
+  images: ApplicationImageRecord[],
+  ocrBlocks: OcrTextBlockRecord[],
+  requestedFieldKeys: Array<keyof SubmittedApplicationData>,
+  evidenceOcrBlocks: OcrTextBlockRecord[]
+) {
+  const apiKey = requiredEnv("GEMINI_API_KEY");
+  const model = normalizeGeminiModel(process.env.GEMINI_MODEL ?? "gemini-2.0-flash");
+  const requestedDefinitions = fieldDefinitions.filter((field) => requestedFieldKeys.includes(field.key));
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      contents: [
+        {
+          role: "user",
+          parts: [
+            {
+              text: [
+                "You extract alcohol label fields from Azure OCR text.",
+                "Return only valid JSON that matches this shape: {\"fields\":[{\"field_key\":\"brand_name\",\"extracted_value\":\"\",\"normalized_value\":\"\",\"confidence\":0,\"extraction_status\":\"found\",\"explanation\":\"\",\"evidence_block_ids\":[]}]}",
+                "Only include the requested field_definitions. Use evidence_block_ids from the supplied OCR blocks when the text supports a field. If a field is not supported by OCR text, return an empty value with extraction_status \"missing\".",
+                JSON.stringify({
+                  submitted_data: application.submitted_data,
+                  field_definitions: requestedDefinitions,
+                  images: images.map((image) => ({
+                    id: image.id,
+                    label_type: image.label_type,
+                    filename: image.original_filename
+                  })),
+                  ocr_blocks: ocrBlocks.map((block) => ({
+                    id: block.id,
+                    image_id: block.image_id,
+                    text: block.text,
+                    confidence: block.confidence,
+                    bbox: block.bbox
+                  }))
+                })
+              ].join("\n\n")
+            }
+          ]
+        }
+      ],
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: geminiExtractionSchemaFor(requestedFieldKeys),
+        temperature: 0
+      }
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`Gemini extraction failed: ${response.status} ${await response.text()}`);
+  }
+
+  const json = (await response.json()) as GeminiResponse;
+  const outputText = extractGeminiText(json);
+  const parsed = JSON.parse(outputText) as ExtractionResponse;
+  return mapExtractionResponse(application.id, parsed, evidenceOcrBlocks, requestedFieldKeys, "Gemini");
+}
+
+function normalizeGeminiModel(model: string) {
+  return model.replace(/^models\//, "");
+}
+
+async function extractFieldsWithGeminiVisionForBenchmark(
+  application: ApplicationRecord,
+  images: BenchmarkImageRecord[],
+  ocrBlocks: OcrTextBlockRecord[]
+) {
+  const apiKey = requiredEnv("GEMINI_API_KEY");
+  const model = normalizeGeminiModel(process.env.GEMINI_VISION_MODEL ?? process.env.GEMINI_MODEL ?? "gemini-2.0-flash");
+  const imageParts = images
+    .filter((image) => image.base64)
+    .map((image) => ({
+      inlineData: {
+        mimeType: image.media_type ?? image.mime_type ?? "image/jpeg",
+        data: image.base64
+      }
+    }));
+
+  if (imageParts.length === 0) {
+    throw new Error("Gemini vision benchmark requires images with base64 data.");
+  }
+
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      contents: [
+        {
+          role: "user",
+          parts: [
+            ...imageParts,
+            {
+              text: [
+                "You extract alcohol label fields directly from the provided label image or images.",
+                "Extract exactly what appears on the label. Return only valid JSON matching the requested schema.",
+                "Use an empty evidence_block_ids array because this direct vision benchmark does not receive OCR block ids.",
+                JSON.stringify({
+                  submitted_data: application.submitted_data,
+                  field_definitions: fieldDefinitions,
+                  images: images.map((image) => ({
+                    id: image.id,
+                    label_type: image.label_type,
+                    filename: image.original_filename
+                  }))
+                })
+              ].join("\n\n")
+            }
+          ]
+        }
+      ],
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: geminiExtractionSchemaFor(allFieldKeys()),
+        temperature: 0
+      }
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`Gemini vision extraction failed: ${response.status} ${await response.text()}`);
+  }
+
+  const json = (await response.json()) as GeminiResponse;
+  const outputText = extractGeminiText(json);
+  const parsed = JSON.parse(outputText) as ExtractionResponse;
+  return mapExtractionResponse(application.id, parsed, ocrBlocks, allFieldKeys(), "Gemini vision");
+}
+
+function mapExtractionResponse(
+  applicationId: string,
+  response: ExtractionResponse,
+  ocrBlocks: OcrTextBlockRecord[],
+  requestedFieldKeys: Array<keyof SubmittedApplicationData>,
+  providerName: string
+) {
   const fields: ExtractedFieldRecord[] = [];
   const evidence: Array<{
     id: string;
@@ -644,10 +838,18 @@ function mapExtractionResponse(applicationId: string, response: ExtractionRespon
     created_at: string;
   }> = [];
   const blocksById = new Map(ocrBlocks.map((block) => [block.id, block]));
+  const requested = new Set(requestedFieldKeys);
+  const returnedFieldKeys = new Set<keyof SubmittedApplicationData>();
 
   for (const item of response.fields) {
+    if (!requested.has(item.field_key)) {
+      continue;
+    }
+
+    returnedFieldKeys.add(item.field_key);
     const definition = fieldDefinitions.find((field) => field.key === item.field_key);
     const fieldId = `field-${crypto.randomUUID()}`;
+    const evidenceBlocks = evidenceBlocksForExtractionItem(item, ocrBlocks, blocksById);
     fields.push({
       id: fieldId,
       application_id: applicationId,
@@ -657,16 +859,11 @@ function mapExtractionResponse(applicationId: string, response: ExtractionRespon
       normalized_value: item.normalized_value,
       confidence: clampConfidence(item.confidence),
       extraction_status: item.extraction_status,
-      explanation: item.explanation,
+      explanation: `${providerName}: ${item.explanation}`,
       created_at: new Date().toISOString()
     });
 
-    for (const [index, blockId] of item.evidence_block_ids.entries()) {
-      const block = blocksById.get(blockId);
-      if (!block) {
-        continue;
-      }
-
+    for (const [index, block] of evidenceBlocks.entries()) {
       evidence.push({
         id: `evidence-${crypto.randomUUID()}`,
         extracted_field_id: fieldId,
@@ -681,7 +878,194 @@ function mapExtractionResponse(applicationId: string, response: ExtractionRespon
     }
   }
 
+  for (const fieldKey of requestedFieldKeys) {
+    if (returnedFieldKeys.has(fieldKey)) {
+      continue;
+    }
+
+    fields.push({
+      id: `field-${crypto.randomUUID()}`,
+      application_id: applicationId,
+      field_key: fieldKey,
+      field_label: fieldLabel(fieldKey),
+      extracted_value: "",
+      normalized_value: "",
+      confidence: 0,
+      extraction_status: "missing",
+      explanation: `${providerName}: No extraction result was returned for this requested field.`,
+      created_at: new Date().toISOString()
+    });
+  }
+
   return { fields, evidence };
+}
+
+function evidenceBlocksForExtractionItem(
+  item: ExtractionResponse["fields"][number],
+  ocrBlocks: OcrTextBlockRecord[],
+  blocksById: Map<string, OcrTextBlockRecord>
+) {
+  const explicitBlocks = item.evidence_block_ids
+    .map((blockId) => blocksById.get(blockId))
+    .filter((block): block is OcrTextBlockRecord => Boolean(block));
+
+  if (explicitBlocks.length > 0) {
+    return explicitBlocks.slice(0, 4);
+  }
+
+  return findEvidenceBlocksForExtractedValue(item.field_key, item.extracted_value, ocrBlocks);
+}
+
+function mergeExtractionResults(
+  deterministic: FieldExtractionResult,
+  fallback: FieldExtractionResult,
+  fallbackFieldKeys: Array<keyof SubmittedApplicationData>
+): FieldExtractionResult {
+  const fallbackKeys = new Set(fallbackFieldKeys);
+  const fallbackFieldsByKey = new Map(fallback.fields.map((field) => [field.field_key, field]));
+  const fallbackFieldIds = new Set([...fallbackFieldsByKey.values()].map((field) => field.id));
+  const keptFieldIds = new Set(
+    deterministic.fields.filter((field) => !fallbackKeys.has(field.field_key) || !fallbackFieldsByKey.has(field.field_key)).map((field) => field.id)
+  );
+
+  const fields = deterministic.fields.map((field) => fallbackFieldsByKey.get(field.field_key) ?? field);
+  const evidence = [
+    ...deterministic.evidence.filter((item) => keptFieldIds.has(item.extracted_field_id)),
+    ...fallback.evidence.filter((item) => fallbackFieldIds.has(item.extracted_field_id))
+  ];
+
+  return { fields, evidence };
+}
+
+function selectFallbackOcrBlocks(
+  application: ApplicationRecord,
+  ocrBlocks: OcrTextBlockRecord[],
+  fieldKeys: Array<keyof SubmittedApplicationData>,
+  extracted: FieldExtractionResult
+) {
+  const selected = new Map<string, OcrTextBlockRecord>();
+  const blocksById = new Map(ocrBlocks.map((block) => [block.id, block]));
+  const maxBlocks = numberEnv("FALLBACK_OCR_BLOCK_LIMIT", 80);
+
+  function addBlock(block: OcrTextBlockRecord | undefined) {
+    if (block) {
+      selected.set(block.id, block);
+    }
+  }
+
+  function addWithNeighbors(block: OcrTextBlockRecord | undefined) {
+    addBlock(block);
+    for (const neighbor of neighborOcrBlocks(block, ocrBlocks)) {
+      addBlock(neighbor);
+    }
+  }
+
+  for (const evidence of extracted.evidence) {
+    if (evidence.ocr_text_block_id) {
+      addWithNeighbors(blocksById.get(evidence.ocr_text_block_id));
+    }
+  }
+
+  for (const fieldKey of fieldKeys) {
+    const submittedValue = application.submitted_data[fieldKey];
+    if (fieldKey === "alcohol_content") {
+      addPatternBlocks(ocrBlocks, alcoholContentPattern(), addWithNeighbors);
+      continue;
+    }
+    if (fieldKey === "net_contents") {
+      addPatternBlocks(ocrBlocks, netContentsPattern(), addWithNeighbors);
+      continue;
+    }
+    if (fieldKey === "government_warning") {
+      for (const block of ocrBlocks.filter((candidate) => warningKeywordScore(candidate.text) >= 0.15 || governmentWarningScore(candidate.text) >= 0.15)) {
+        addWithNeighbors(block);
+      }
+      continue;
+    }
+
+    for (const candidate of topScoredBlocks(ocrBlocks, (block) => weightedTextScore(submittedValue, block.text, block.confidence), 8, 0.25)) {
+      addWithNeighbors(candidate.block);
+    }
+  }
+
+  for (const candidate of topScoredBlocks(ocrBlocks, (block) => block.confidence ?? 0, maxBlocks, 0.75)) {
+    addBlock(candidate.block);
+  }
+
+  return sortOcrBlocksInReadingOrder([...selected.values()]).slice(0, maxBlocks);
+}
+
+function addPatternBlocks(ocrBlocks: OcrTextBlockRecord[], pattern: RegExp, addBlock: (block: OcrTextBlockRecord) => void) {
+  for (const block of ocrBlocks) {
+    pattern.lastIndex = 0;
+    if (pattern.test(block.text)) {
+      addBlock(block);
+    }
+  }
+}
+
+function neighborOcrBlocks(block: OcrTextBlockRecord | undefined, ocrBlocks: OcrTextBlockRecord[]) {
+  if (!block || typeof block.block_order !== "number") {
+    return [];
+  }
+
+  return ocrBlocks.filter((candidate) => candidate.image_id === block.image_id && Math.abs((candidate.block_order ?? 0) - block.block_order!) <= 1);
+}
+
+function findEvidenceBlocksForExtractedValue(
+  fieldKey: keyof SubmittedApplicationData,
+  extractedValue: string,
+  ocrBlocks: OcrTextBlockRecord[]
+) {
+  const normalized = normalizeText(extractedValue);
+  if (!normalized) {
+    return [];
+  }
+
+  if (fieldKey === "alcohol_content") {
+    const patternMatches = ocrBlocks.filter((block) => {
+      const pattern = alcoholContentPattern();
+      return pattern.test(block.text) && similarityScore(extractedValue, block.text) >= 0.2;
+    });
+    if (patternMatches.length > 0) {
+      return sortOcrBlocksInReadingOrder(patternMatches).slice(0, 2);
+    }
+  }
+
+  if (fieldKey === "net_contents") {
+    const patternMatches = ocrBlocks.filter((block) => {
+      const pattern = netContentsPattern();
+      return pattern.test(block.text) && similarityScore(extractedValue, block.text) >= 0.2;
+    });
+    if (patternMatches.length > 0) {
+      return sortOcrBlocksInReadingOrder(patternMatches).slice(0, 2);
+    }
+  }
+
+  return topScoredBlocks(ocrBlocks, (block) => weightedTextScore(extractedValue, block.text, block.confidence), 4, 0.25).map((candidate) => candidate.block);
+}
+
+function topScoredBlocks(
+  ocrBlocks: OcrTextBlockRecord[],
+  scoreBlock: (block: OcrTextBlockRecord) => number,
+  limit: number,
+  minimumScore: number
+) {
+  return ocrBlocks
+    .map((block) => ({ block, score: scoreBlock(block) }))
+    .filter((candidate) => candidate.score >= minimumScore)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit);
+}
+
+function sortOcrBlocksInReadingOrder(ocrBlocks: OcrTextBlockRecord[]) {
+  return [...ocrBlocks].sort((a, b) => {
+    if (a.image_id !== b.image_id) {
+      return a.image_id.localeCompare(b.image_id);
+    }
+
+    return (a.block_order ?? a.line_number ?? 0) - (b.block_order ?? b.line_number ?? 0);
+  });
 }
 
 function runValidators(application: ApplicationRecord, fields: ExtractedFieldRecord[]) {
@@ -776,6 +1160,120 @@ function validationResult(
   };
 }
 
+async function runExtractionBenchmark(inputPath: string | undefined) {
+  if (!inputPath) {
+    throw new Error("Pass a benchmark JSON file after --benchmark-extraction.");
+  }
+
+  const input = JSON.parse(readFileSync(inputPath, "utf8")) as ExtractionBenchmarkInput;
+  const application = benchmarkApplication(input);
+  const images = benchmarkImages(input);
+  const ocrBlocks = input.ocr_blocks ?? input.ocrBlocks ?? [];
+  if (ocrBlocks.length === 0) {
+    throw new Error("Benchmark input must include ocr_blocks.");
+  }
+
+  const results: ExtractionBenchmarkResult[] = [];
+  const deterministic = await timeBenchmark("deterministic", async () => extractFieldsDeterministically(application, ocrBlocks));
+  results.push(deterministic);
+
+  if (process.env.OPENAI_API_KEY) {
+    results.push(await timeBenchmark("hybrid-openai", async () => runBenchmarkHybridProvider("openai", application, images, ocrBlocks, deterministic.result)));
+  }
+
+  if (process.env.GEMINI_API_KEY) {
+    results.push(await timeBenchmark("hybrid-gemini-text", async () => runBenchmarkHybridProvider("gemini", application, images, ocrBlocks, deterministic.result)));
+
+    if (images.some((image) => image.base64)) {
+      results.push(await timeBenchmark("gemini-vision", async () => extractFieldsWithGeminiVisionForBenchmark(application, images, ocrBlocks)));
+    }
+  }
+
+  console.log(
+    JSON.stringify(
+      results.map((result) => ({
+        name: result.name,
+        duration_ms: result.durationMs,
+        fields: result.result.fields.map((field) => ({
+          field_key: field.field_key,
+          status: field.extraction_status,
+          confidence: field.confidence,
+          extracted_value: field.extracted_value
+        })),
+        evidence_count: result.result.evidence.length
+      })),
+      null,
+      2
+    )
+  );
+}
+
+async function runBenchmarkHybridProvider(
+  provider: ExtractionProvider,
+  application: ApplicationRecord,
+  images: BenchmarkImageRecord[],
+  ocrBlocks: OcrTextBlockRecord[],
+  deterministic: FieldExtractionResult
+) {
+  const unresolvedFieldKeys = findUnresolvedFieldKeys(deterministic.fields);
+  if (unresolvedFieldKeys.length === 0) {
+    return deterministic;
+  }
+
+  const fallbackOcrBlocks = selectFallbackOcrBlocks(application, ocrBlocks, unresolvedFieldKeys, deterministic);
+  const fallback = await extractFieldsWithProvider(provider, application, images, fallbackOcrBlocks, unresolvedFieldKeys, ocrBlocks);
+  return mergeExtractionResults(deterministic, fallback, unresolvedFieldKeys);
+}
+
+async function timeBenchmark(name: string, run: () => Promise<FieldExtractionResult> | FieldExtractionResult): Promise<ExtractionBenchmarkResult> {
+  const start = performance.now();
+  const result = await run();
+  return {
+    name,
+    durationMs: Math.round(performance.now() - start),
+    result
+  };
+}
+
+function benchmarkApplication(input: ExtractionBenchmarkInput): ApplicationRecord {
+  const application = input.application;
+  if (application) {
+    return application;
+  }
+
+  if (!input.submitted_data) {
+    throw new Error("Benchmark input must include application or submitted_data.");
+  }
+
+  return {
+    id: input.application_id ?? "benchmark-application",
+    application_number: input.application_number ?? "BENCHMARK",
+    submitted_data: input.submitted_data,
+    processing_status: "pending",
+    attempt_count: 0,
+    review_status: "unreviewed",
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+}
+
+function benchmarkImages(input: ExtractionBenchmarkInput): BenchmarkImageRecord[] {
+  return (input.images ?? []).map((image, index) => ({
+    id: image.id ?? `benchmark-image-${index + 1}`,
+    application_id: image.application_id ?? input.application_id ?? "benchmark-application",
+    image_url: image.image_url ?? "",
+    storage_path: image.storage_path,
+    label_type: image.label_type ?? "other",
+    original_filename: image.original_filename,
+    mime_type: image.mime_type ?? image.media_type,
+    width_px: image.width_px,
+    height_px: image.height_px,
+    created_at: image.created_at ?? new Date().toISOString(),
+    base64: image.base64 ?? image.image_base64,
+    media_type: image.media_type ?? image.mime_type
+  }));
+}
+
 async function updateApplicationStatus(
   supabase: ReturnType<typeof createWorkerSupabaseClient>,
   applicationId: string,
@@ -858,8 +1356,19 @@ function validateProviderEnv() {
   }
 
   const extractionMode = (process.env.EXTRACTION_MODE ?? "deterministic").toLowerCase();
-  if (extractionMode === "openai" || extractionMode === "llm" || extractionMode === "hybrid") {
+  if (extractionMode === "openai" || extractionMode === "llm") {
     requiredEnv("OPENAI_API_KEY");
+    return;
+  }
+
+  if (extractionMode === "gemini") {
+    requiredEnv("GEMINI_API_KEY");
+    return;
+  }
+
+  if (extractionMode === "hybrid") {
+    const provider = fallbackExtractionProvider();
+    requiredEnv(provider === "gemini" ? "GEMINI_API_KEY" : "OPENAI_API_KEY");
   }
 }
 
@@ -984,6 +1493,18 @@ function extractOpenAiText(response: OpenAiResponse) {
   throw new Error("OpenAI response did not include output text.");
 }
 
+function extractGeminiText(response: GeminiResponse) {
+  for (const candidate of response.candidates ?? []) {
+    for (const part of candidate.content?.parts ?? []) {
+      if (typeof part.text === "string") {
+        return part.text;
+      }
+    }
+  }
+
+  throw new Error("Gemini response did not include output text.");
+}
+
 function alcoholContentPattern() {
   return /\b\d{1,3}(?:\.\d+)?\s*(?:%|percent|alc\.?\s*\/?\s*vol\.?|abv)\b|\b\d{1,3}(?:\.\d+)?\s*proof\b/gi;
 }
@@ -1104,59 +1625,88 @@ function clampPercent(value: number) {
   return Math.max(0, Math.min(100, value));
 }
 
-const extractionSchema = {
-  type: "object",
-  additionalProperties: false,
-  required: ["fields"],
-  properties: {
-    fields: {
-      type: "array",
-      items: {
-        type: "object",
-        additionalProperties: false,
-        required: [
-          "field_key",
-          "extracted_value",
-          "normalized_value",
-          "confidence",
-          "extraction_status",
-          "explanation",
-          "evidence_block_ids"
-        ],
-        properties: {
-          field_key: {
-            type: "string",
-            enum: fieldDefinitions.map((field) => field.key)
-          },
-          extracted_value: {
-            type: "string"
-          },
-          normalized_value: {
-            type: "string"
-          },
-          confidence: {
-            type: "number",
-            minimum: 0,
-            maximum: 1
-          },
-          extraction_status: {
-            type: "string",
-            enum: ["found", "missing", "ambiguous", "conflict"]
-          },
-          explanation: {
-            type: "string"
-          },
-          evidence_block_ids: {
-            type: "array",
-            items: {
-              type: "string"
+function extractionSchemaFor(fieldKeys: Array<keyof SubmittedApplicationData>) {
+  return {
+    type: "object",
+    additionalProperties: false,
+    required: ["fields"],
+    properties: {
+      fields: {
+        type: "array",
+        items: extractionFieldSchema(fieldKeys)
+      }
+    }
+  };
+}
+
+function extractionFieldSchema(fieldKeys: Array<keyof SubmittedApplicationData>) {
+  return {
+    type: "object",
+    additionalProperties: false,
+    required: [
+      "field_key",
+      "extracted_value",
+      "normalized_value",
+      "confidence",
+      "extraction_status",
+      "explanation",
+      "evidence_block_ids"
+    ],
+    properties: {
+      field_key: {
+        type: "string",
+        enum: fieldKeys
+      },
+      extracted_value: {
+        type: "string"
+      },
+      normalized_value: {
+        type: "string"
+      },
+      confidence: {
+        type: "number",
+        minimum: 0,
+        maximum: 1
+      },
+      extraction_status: {
+        type: "string",
+        enum: ["found", "missing", "ambiguous", "conflict"]
+      },
+      explanation: {
+        type: "string"
+      },
+      evidence_block_ids: {
+        type: "array",
+        items: {
+          type: "string"
+        }
+      }
+    }
+  };
+}
+
+function geminiExtractionSchemaFor(fieldKeys: Array<keyof SubmittedApplicationData>) {
+  const fieldSchema = extractionFieldSchema(fieldKeys);
+  return {
+    type: "object",
+    properties: {
+      fields: {
+        type: "array",
+        items: {
+          ...fieldSchema,
+          additionalProperties: undefined,
+          properties: {
+            ...fieldSchema.properties,
+            confidence: {
+              type: "number"
             }
           }
         }
       }
-    }
-  }
-};
+    },
+    required: ["fields"]
+  };
+}
 
 type ExtractionResponse = {
   fields: Array<{
@@ -1201,7 +1751,47 @@ type OpenAiResponse = {
   }>;
 };
 
-main().catch((error) => {
+type GeminiResponse = {
+  candidates?: Array<{
+    content?: {
+      parts?: Array<{
+        text?: string;
+      }>;
+    };
+  }>;
+};
+
+type ExtractionBenchmarkInput = {
+  application?: ApplicationRecord;
+  application_id?: string;
+  application_number?: string;
+  submitted_data?: SubmittedApplicationData;
+  images?: BenchmarkImageInput[];
+  ocr_blocks?: OcrTextBlockRecord[];
+  ocrBlocks?: OcrTextBlockRecord[];
+};
+
+type BenchmarkImageInput = Partial<ApplicationImageRecord> & {
+  base64?: string;
+  image_base64?: string;
+  media_type?: string;
+};
+
+type BenchmarkImageRecord = ApplicationImageRecord & {
+  base64?: string;
+  media_type?: string;
+};
+
+type ExtractionBenchmarkResult = {
+  name: string;
+  durationMs: number;
+  result: FieldExtractionResult;
+};
+
+const benchmarkArgIndex = process.argv.indexOf("--benchmark-extraction");
+const entrypoint = benchmarkArgIndex === -1 ? main() : runExtractionBenchmark(process.argv[benchmarkArgIndex + 1]);
+
+entrypoint.catch((error) => {
   console.error(error instanceof Error ? error.message : error);
   process.exitCode = 1;
 });
