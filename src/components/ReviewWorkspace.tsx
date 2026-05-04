@@ -21,6 +21,7 @@ import {
   type ApplicationImageRecord,
   type EvidenceView,
   type OcrImageSummary,
+  type ReviewAnalysis,
   type ReviewFieldRow,
   type ReviewStatus
 } from "@/features/applications/types";
@@ -68,7 +69,13 @@ function finalDecisionLabel(decision: "approved" | "rejected") {
   return decision === "approved" ? "Approved" : "Rejected";
 }
 
-export function ReviewWorkspace({ applicationId }: { applicationId: string }) {
+export function ReviewWorkspace({
+  applicationId,
+  initialAnalysis
+}: {
+  applicationId: string;
+  initialAnalysis: ReviewAnalysis;
+}) {
   const database = useApplicationStore((state) => state.database);
   const isDatabaseLoading = useApplicationStore((state) => state.isDatabaseLoading);
   const databaseError = useApplicationStore((state) => state.databaseError);
@@ -84,7 +91,8 @@ export function ReviewWorkspace({ applicationId }: { applicationId: string }) {
   const rotateViewer = useApplicationStore((state) => state.rotateViewer);
   const openDecisionModal = useApplicationStore((state) => state.openDecisionModal);
 
-  const analysis = getReviewAnalysis(database, applicationId);
+  const storeAnalysis = getReviewAnalysis(database, applicationId);
+  const analysis = storeAnalysis ?? initialAnalysis;
   const [requestedImageIndex, setRequestedImageIndex] = useState(0);
 
   const selectedFieldKey = activeFieldByApplicationId[applicationId];
